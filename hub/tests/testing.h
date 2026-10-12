@@ -6,7 +6,7 @@
 #include <string>
 #include <vector>
 
-namespace moat::testing {
+namespace douve::testing {
 
 struct Case {
     const char* name;
@@ -34,21 +34,21 @@ inline void fail(const char* file, int line, const std::string& what) {
     ++failures();
 }
 
-} // namespace moat::testing
+} // namespace douve::testing
 
-#define MOAT_CONCAT2(a, b) a##b
-#define MOAT_CONCAT(a, b) MOAT_CONCAT2(a, b)
+#define DOUVE_CONCAT2(a, b) a##b
+#define DOUVE_CONCAT(a, b) DOUVE_CONCAT2(a, b)
 #define TEST(name)                                                                                 \
-    static void MOAT_CONCAT(test_, name)();                                                        \
-    static ::moat::testing::Registrar MOAT_CONCAT(reg_, name)(#name, MOAT_CONCAT(test_, name));    \
-    static void MOAT_CONCAT(test_, name)()
+    static void DOUVE_CONCAT(test_, name)();                                                       \
+    static ::douve::testing::Registrar DOUVE_CONCAT(reg_, name)(#name, DOUVE_CONCAT(test_, name)); \
+    static void DOUVE_CONCAT(test_, name)()
 #define CHECK(cond)                                                                                \
     do {                                                                                           \
         if (!(cond))                                                                               \
-            ::moat::testing::fail(__FILE__, __LINE__, #cond);                                      \
+            ::douve::testing::fail(__FILE__, __LINE__, #cond);                                     \
     } while (0)
 #define CHECK_EQ(a, b)                                                                             \
     do {                                                                                           \
         if (!((a) == (b)))                                                                         \
-            ::moat::testing::fail(__FILE__, __LINE__, #a " == " #b);                               \
+            ::douve::testing::fail(__FILE__, __LINE__, #a " == " #b);                              \
     } while (0)

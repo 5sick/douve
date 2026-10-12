@@ -2,7 +2,7 @@
 #include "testing.h"
 #include "util/crypto.h"
 
-using namespace moat;
+using namespace douve;
 
 namespace {
 Channel ch(const std::string& kind, Json::Value cfg) {
@@ -25,7 +25,7 @@ std::string header(const HttpPost& r, const std::string& k) {
 } // namespace
 
 TEST(channels_validate) {
-    auto n = ch("ntfy", J(R"({"topic":"moat-alerts_1","server":"https://ntfy.example.com/"})"));
+    auto n = ch("ntfy", J(R"({"topic":"douve-alerts_1","server":"https://ntfy.example.com/"})"));
     CHECK(validateChannel(n).empty());
     CHECK(n.config["server"].asString() == "https://ntfy.example.com"); // 끝의 / 제거
     CHECK(n.name == "ntfy");                                            // 이름 기본값
@@ -80,13 +80,13 @@ TEST(channels_requests) {
     auto w = ch("webhook", J(R"({"url":"https://x.example/h","secret":"k"})"));
     auto rw = channelRequest(w, "hello", 1700000000);
     auto bw = J(rw.body.c_str());
-    CHECK(bw["text"].asString() == "hello" && bw["source"].asString() == "moat" &&
+    CHECK(bw["text"].asString() == "hello" && bw["source"].asString() == "douve" &&
           bw["time"].asInt64() == 1700000000);
-    CHECK(header(rw, "X-Moat-Timestamp") == "1700000000");
-    CHECK(header(rw, "X-Moat-Signature") ==
+    CHECK(header(rw, "X-Douve-Timestamp") == "1700000000");
+    CHECK(header(rw, "X-Douve-Signature") ==
           "sha256=" + toHex(hmacSha256("k", "1700000000." + rw.body)));
     auto w2 = ch("webhook", J(R"({"url":"https://x.example/h"})"));
-    CHECK(header(channelRequest(w2, "x", 1), "X-Moat-Signature").empty());
+    CHECK(header(channelRequest(w2, "x", 1), "X-Douve-Signature").empty());
 }
 
 TEST(channels_mask_and_store) {

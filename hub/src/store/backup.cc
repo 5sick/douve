@@ -10,7 +10,7 @@
 #include <sstream>
 #include <vector>
 
-namespace moat {
+namespace douve {
 
 namespace fs = std::filesystem;
 
@@ -68,14 +68,14 @@ std::string writeBackup(Database& db, const std::string& configPath, const std::
         }
         {
             Database b(tmp);
-            b.exec("CREATE TABLE moat_backup (key TEXT PRIMARY KEY, value TEXT NOT NULL)");
+            b.exec("CREATE TABLE douve_backup (key TEXT PRIMARY KEY, value TEXT NOT NULL)");
             auto put = [&](const std::string& k, const std::string& v) {
-                Statement(b, "INSERT INTO moat_backup (key, value) VALUES (?, ?)")
+                Statement(b, "INSERT INTO douve_backup (key, value) VALUES (?, ?)")
                     .bind(1, k)
                     .bind(2, v)
                     .run();
             };
-            put("format", "moat-backup-1");
+            put("format", "douve-backup-1");
             put("version", version);
             put("created_at", std::to_string(now));
             put("schema", std::to_string(b.schemaVersion()));
@@ -110,11 +110,15 @@ std::optional<BackupInfo> readBackupInfo(const std::string& path, std::string& e
         bool ok = false;
         {
             Database b(tmp);
-            Statement q(b, "SELECT key, value FROM moat_backup");
+            // 이름을 바꾸기 전(Moat) 백업도 읽는다: 표 moat_backup, 형식 moat-backup-1
+            Statement t(b, "SELECT name FROM sqlite_master WHERE type = 'table' AND name IN "
+                           "('douve_backup', 'moat_backup') ORDER BY name LIMIT 1");
+            const std::string table = t.step() ? t.text(0) : "douve_backup";
+            Statement q(b, "SELECT key, value FROM " + table);
             while (q.step()) {
                 const auto k = q.text(0), v = q.text(1);
                 if (k == "format")
-                    ok = v == "moat-backup-1";
+                    ok = v == "douve-backup-1" || v == "moat-backup-1";
                 else if (k == "hub.json")
                     info.config = v;
                 else if (k == "version")
@@ -129,7 +133,7 @@ std::optional<BackupInfo> readBackupInfo(const std::string& path, std::string& e
         fs::remove(tmp + "-wal", ec);
         fs::remove(tmp + "-shm", ec);
         if (!ok) {
-            error = "Moat 백업 파일이 아닙니다";
+            error = "Douve 백업 파일이 아닙니다";
             return std::nullopt;
         }
         return info;
@@ -149,7 +153,8 @@ std::string restoreDatabase(const std::string& backupPath, const std::string& db
         fs::create_directories(fs::path(dbPath).parent_path(), ec);
         fs::copy_file(backupPath, staged, fs::copy_options::overwrite_existing);
         {
-            Database b(staged); // 이 moat-hub보다 새 스키마면 여기서 실패
+            Database b(staged); // 이 douve-hub보다 새 스키마면 여기서 실패
+            b.exec("DROP TABLE IF EXISTS douve_backup");
             b.exec("DROP TABLE IF EXISTS moat_backup");
             b.exec("PRAGMA wal_checkpoint(TRUNCATE)");
         }
@@ -203,4 +208,4 @@ std::optional<std::string> dailyBackup(Database& db, const std::string& configPa
     return made;
 }
 
-} // namespace moat
+} // namespace douve

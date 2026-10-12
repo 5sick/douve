@@ -30,10 +30,10 @@ type Event struct {
 	TS      int64             `json:"ts"`   // 유닉스 초
 	Summary string            `json:"summary"`
 	Fields  map[string]string `json:"fields"`
-	ViaSID  string            `json:"via_sid,omitempty"` // Moat 웹 터미널 세션에서 일어난 일
+	ViaSID  string            `json:"via_sid,omitempty"` // Douve 웹 터미널 세션에서 일어난 일
 }
 
-// TTYResolver는 pts 이름(예: pts/3)이 Moat 터미널 세션이면 그 세션 ID를 돌려준다.
+// TTYResolver는 pts 이름(예: pts/3)이 Douve 터미널 세션이면 그 세션 ID를 돌려준다.
 type TTYResolver func(tty string) string
 
 type Collector struct {
@@ -55,7 +55,7 @@ type Collector struct {
 func New(stateDir string, resolve TTYResolver) *Collector {
 	c := &Collector{StateDir: stateDir, Resolve: resolve, journal: readJournal, files: watchedFiles}
 	// 시험용 훅 (E2E): journald 대신 파일(읽고 비움), 감시 파일 목록 지정
-	if p := os.Getenv("MOAT_TEST_JOURNAL_FILE"); p != "" {
+	if p := os.Getenv("DOUVE_TEST_JOURNAL_FILE"); p != "" {
 		c.journal = func(context.Context, string) ([]byte, error) {
 			b, err := os.ReadFile(p)
 			if err == nil {
@@ -64,7 +64,7 @@ func New(stateDir string, resolve TTYResolver) *Collector {
 			return b, err
 		}
 	}
-	if v := os.Getenv("MOAT_TEST_WATCH_FILES"); v != "" {
+	if v := os.Getenv("DOUVE_TEST_WATCH_FILES"); v != "" {
 		list := strings.Split(v, ":")
 		c.files = func() []string { return list }
 	}
@@ -73,7 +73,7 @@ func New(stateDir string, resolve TTYResolver) *Collector {
 }
 
 // TestHooksEnabled는 시험용 훅이 켜져 있는지 (root가 아니어도 보안 수집을 돌림).
-func TestHooksEnabled() bool { return os.Getenv("MOAT_TEST_JOURNAL_FILE") != "" }
+func TestHooksEnabled() bool { return os.Getenv("DOUVE_TEST_JOURNAL_FILE") != "" }
 
 type persisted struct {
 	Cursor string            `json:"cursor"`

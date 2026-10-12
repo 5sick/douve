@@ -7,7 +7,7 @@ func TestString(t *testing.T) {
 	t.Cleanup(func() { Version = old })
 
 	Version = "1.2.3"
-	if got, want := String(), "moat-agent 1.2.3"; got != want {
+	if got, want := String(), "douve-agent 1.2.3"; got != want {
 		t.Fatalf("String() = %q, want %q", got, want)
 	}
 }

@@ -11,7 +11,7 @@
 struct sqlite3;
 struct sqlite3_stmt;
 
-namespace moat {
+namespace douve {
 
 struct DbError : std::runtime_error {
     using std::runtime_error::runtime_error;
@@ -88,4 +88,4 @@ class Transaction {
     bool done_ = false;
 };
 
-} // namespace moat
+} // namespace douve

@@ -1,7 +1,7 @@
 #include "auth/ratelimit.h"
 #include "testing.h"
 
-using moat::RateLimiter;
+using douve::RateLimiter;
 
 TEST(ratelimit_window) {
     RateLimiter rl(3, 60);

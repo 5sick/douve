@@ -5,7 +5,7 @@
 #include <regex>
 #include <sstream>
 
-namespace moat {
+namespace douve {
 namespace {
 struct Key {
     const char* name;
@@ -124,4 +124,4 @@ std::string validateGoogle(const std::string& clientId, const std::string& clien
     return {};
 }
 
-} // namespace moat
+} // namespace douve

@@ -3,7 +3,7 @@
 #include "store/repo.h"
 #include "testing.h"
 
-using namespace moat;
+using namespace douve;
 
 namespace {
 constexpr std::int64_t kDay = 86400;
@@ -11,7 +11,7 @@ constexpr std::int64_t kDay = 86400;
 HubConfig testConfig() {
     std::string err;
     return *parseConfig(
-        R"({"public_url":"https://moat.example.com","cookie_domain":"example.com",
+        R"({"public_url":"https://douve.example.com","cookie_domain":"example.com",
                             "session_idle_days":30,"session_max_days":90})",
         err);
 }
@@ -106,7 +106,7 @@ TEST(session_cookie_header) {
     auto cfg = testConfig();
     SessionManager sm(db, cfg);
     auto c = sm.cookieHeader("TOKEN");
-    CHECK(c.find("moat_session=TOKEN") == 0);
+    CHECK(c.find("douve_session=TOKEN") == 0);
     CHECK(c.find("HttpOnly") != std::string::npos);
     CHECK(c.find("Secure") != std::string::npos);
     CHECK(c.find("SameSite=Lax") != std::string::npos);
@@ -115,10 +115,10 @@ TEST(session_cookie_header) {
 }
 
 TEST(cookie_value_parsing) {
-    CHECK_EQ(*cookieValue("a=1; moat_session=abc; b=2", "moat_session"), "abc");
-    CHECK_EQ(*cookieValue("moat_session=abc", "moat_session"), "abc");
-    CHECK(!cookieValue("xmoat_session=abc", "moat_session"));
-    CHECK(!cookieValue("", "moat_session"));
+    CHECK_EQ(*cookieValue("a=1; douve_session=abc; b=2", "douve_session"), "abc");
+    CHECK_EQ(*cookieValue("douve_session=abc", "douve_session"), "abc");
+    CHECK(!cookieValue("xdouve_session=abc", "douve_session"));
+    CHECK(!cookieValue("", "douve_session"));
 }
 
 TEST(redirect_allows_own_domains) {
@@ -149,7 +149,7 @@ TEST(redirect_rejects_bypasses) {
     };
     for (auto b : bad) {
         if (safeRedirect(b, cfg) != "/")
-            moat::testing::fail(__FILE__, __LINE__, std::string("허용됨: ") + b);
+            douve::testing::fail(__FILE__, __LINE__, std::string("허용됨: ") + b);
     }
 }
 

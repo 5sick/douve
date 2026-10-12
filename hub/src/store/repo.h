@@ -8,7 +8,7 @@
 #include <optional>
 #include <string>
 
-namespace moat {
+namespace douve {
 
 struct User {
     std::int64_t id = 0;
@@ -33,4 +33,4 @@ void purgeExpiredPending(Database& db, std::int64_t now);
 void audit(Database& db, std::optional<std::int64_t> userId, const std::string& event,
            const std::string& ip, const std::string& detail, std::int64_t now);
 
-} // namespace moat
+} // namespace douve

@@ -80,10 +80,10 @@ async function connect(nodeId, user) {
 async function initLive() {
   const nodeId = Number(q.get('node'));
   const node = await api(`/api/nodes/${nodeId}`);
-  document.title = `Moat 터미널 · ${node.name}`;
+  document.title = `Douve 터미널 · ${node.name}`;
   $('term-title').textContent = node.name;
   const users = (node.inventory && node.inventory.terminal_users) || [];
-  if (!node.connected) { show('이 서버가 지금 Moat에 접속해 있지 않습니다.'); return; }
+  if (!node.connected) { show('이 서버가 지금 Douve에 접속해 있지 않습니다.'); return; }
   if (!users.length) { show('이 서버에서 터미널을 열 수 있는 계정이 없습니다 (sudo/wheel 그룹의 일반 계정 필요).'); return; }
   const sel = $('term-user');
   sel.replaceChildren(...users.map((u) => Object.assign(document.createElement('option'), { value: u, textContent: u })));
@@ -118,7 +118,7 @@ async function initReplay() {
   const header = JSON.parse(lines.shift());
   makeTerminal();
   term.resize(header.width || 80, header.height || 24);
-  status(`${header.title || ''} · ${new Date(header.timestamp * 1000).toLocaleString(window.moatLocale)}`);
+  status(`${header.title || ''} · ${new Date(header.timestamp * 1000).toLocaleString(window.douveLocale)}`);
   const events = lines.map((l) => JSON.parse(l));
   let clock = 0;
   let last = 0;

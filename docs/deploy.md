@@ -7,17 +7,17 @@ manual installs, upgrades and the config file.
 
 ```sh
 # binaries from a release (or build them: make hub-static agent)
-sudo install -m 755 moat-hub-linux-$(uname -m | sed 's/x86_64/amd64/; s/aarch64/arm64/') /usr/local/bin/moat-hub
-sudo moat-hub init --public-url https://moat.example.com --email you@example.com
-sudo moat-hub install-service
-sudo systemctl daemon-reload && sudo systemctl enable --now moat-hub
-sudo moat-hub invite --email you@example.com          # open the link, create your passkey
-sudo moat-hub recovery-codes --email you@example.com  # keep these off the server
+sudo install -m 755 douve-hub-linux-$(uname -m | sed 's/x86_64/amd64/; s/aarch64/arm64/') /usr/local/bin/douve-hub
+sudo douve-hub init --public-url https://douve.example.com --email you@example.com
+sudo douve-hub install-service
+sudo systemctl daemon-reload && sudo systemctl enable --now douve-hub
+sudo douve-hub invite --email you@example.com          # open the link, create your passkey
+sudo douve-hub recovery-codes --email you@example.com  # keep these off the server
 ```
 
-Put the agent binaries (`moat-agent-linux-amd64`, `moat-agent-linux-arm64`, `SHA256SUMS`,
-`VERSION`) in `/usr/local/share/moat/agent/` so that **Servers → Add server** can hand them to new
-servers. `deploy/install-hub.sh <moat-hub binary> [init options]` does all of the above from a
+Put the agent binaries (`douve-agent-linux-amd64`, `douve-agent-linux-arm64`, `SHA256SUMS`,
+`VERSION`) in `/usr/local/share/douve/agent/` so that **Servers → Add server** can hand them to new
+servers. `deploy/install-hub.sh <douve-hub binary> [init options]` does all of the above from a
 source checkout.
 
 The Hub listens on `127.0.0.1:8700` by default. Make one server the entry (Servers → Make entry)
@@ -25,20 +25,20 @@ so its agent serves the Hub and your apps on 80/443, or put your own reverse pro
 
 ## Upgrades
 
-- **Hub:** replace `/usr/local/bin/moat-hub` and restart (`deploy/install-hub.sh` keeps the
-  existing config). Database migrations run automatically; take a `moat-hub backup` first.
+- **Hub:** replace `/usr/local/bin/douve-hub` and restart (`deploy/install-hub.sh` keeps the
+  existing config). Database migrations run automatically; take a `douve-hub backup` first.
 - **Agents:** update themselves when the Hub has a newer agent in
-  `/usr/local/share/moat/agent/`.
+  `/usr/local/share/douve/agent/`.
 
-## `/etc/moat/hub.json`
+## `/etc/douve/hub.json`
 
-Created by `moat-hub init`; mode 600. The service reads it through systemd credentials.
+Created by `douve-hub init`; mode 600. The service reads it through systemd credentials.
 
 | Key | Meaning |
 |---|---|
-| `public_url` | Address users open (`https://moat.example.com`). Used for origin checks and links. |
+| `public_url` | Address users open (`https://douve.example.com`). Used for origin checks and links. |
 | `cookie_domain` | Domain the sign-in cookie covers (default: parent of `public_url`). Apps must be under it. |
-| `rp_id`, `rp_name` | WebAuthn relying party (default: `cookie_domain`, "Moat"). Changing `rp_id` invalidates passkeys. |
+| `rp_id`, `rp_name` | WebAuthn relying party (default: `cookie_domain`, "Douve"). Changing `rp_id` invalidates passkeys. |
 | `allowed_emails` | Accounts allowed to sign in (people you invite are added in the database). |
 | `listen_address`, `listen_port` | Where the Hub listens (default `127.0.0.1:8700`). |
 | `trusted_proxies` | Proxies whose `X-Forwarded-For` is trusted (default loopback). |
@@ -49,15 +49,15 @@ Created by `moat-hub init`; mode 600. The service reads it through systemd crede
 | `privacy_contact` | Contact shown on the `/privacy` page (e.g. an email). Empty hides it. |
 | `google.client_id`, `google.client_secret` | Optional Google sign-in (also settable in the web UI). |
 | `telegram.bot_token`, `telegram.chat_id` | Telegram alerts (also settable in the web UI). |
-| `database_path` | SQLite file (default `/var/lib/moat/hub.db`). |
+| `database_path` | SQLite file (default `/var/lib/douve/hub.db`). |
 | `session_idle_days`, `session_max_days` | Session lifetime (default 30 / 90). |
 | `metrics_retention_days` | How long minute metrics are kept. |
 
-## Using Moat login with your own nginx
+## Using Douve login with your own nginx
 
-If you keep nginx in front of some apps, protect them with Moat via `auth_request`. See
+If you keep nginx in front of some apps, protect them with Douve via `auth_request`. See
 [`deploy/nginx/protect-snippet.conf`](../deploy/nginx/protect-snippet.conf): include it in a
-`server` block, point `proxy_pass` of `/_moat_auth` at the Hub's `/auth/verify`, and add the Hub's
+`server` block, point `proxy_pass` of `/_douve_auth` at the Hub's `/auth/verify`, and add the Hub's
 address to `trusted_proxies` if nginx runs on another machine. A `200` from `/auth/verify` means
-signed in (the user is in the `X-Moat-User` response header); `401` means redirect to
-`https://moat.example.com/login?rd=<original URL>`.
+signed in (the user is in the `X-Douve-User` response header); `401` means redirect to
+`https://douve.example.com/login?rd=<original URL>`.

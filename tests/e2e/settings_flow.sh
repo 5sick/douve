@@ -1,9 +1,9 @@
 #!/bin/bash
 # 웹 설정 E2E: 텔레그램 설정 저장(패스키 재확인·형식 검사·비밀값 숨김) → 가짜 텔레그램으로 테스트 발송 → 초대 링크.
-# 사용: tests/e2e/settings_flow.sh [moat-hub 경로]
+# 사용: tests/e2e/settings_flow.sh [douve-hub 경로]
 set -u
-export MOAT_LANG=ko # CLI 출력 언어 고정 (영어 확인은 따로)
-HUB=${1:-build/hub/moat-hub}
+export DOUVE_LANG=ko # CLI 출력 언어 고정 (영어 확인은 따로)
+HUB=${1:-build/hub/douve-hub}
 HP=18860; TP=18861
 BASE="http://localhost:$HP"
 DIR=$(mktemp -d); trap 'kill $(jobs -p) 2>/dev/null; rm -rf "$DIR"' EXIT
@@ -42,7 +42,7 @@ for tok, re in (("set-fresh-session-0123456789abcdef", now), ("set-stale-session
                (hashlib.sha256(tok.encode()).digest(), now, now, now + 3600, now + 7200, re))
 db.commit()
 PY
-post() { curl -s -X POST -H "Cookie: moat_session=$1" -H "Origin: $BASE" -H 'Content-Type: application/json' -d "$3" "$BASE$2"; }
+post() { curl -s -X POST -H "Cookie: douve_session=$1" -H "Origin: $BASE" -H 'Content-Type: application/json' -d "$3" "$BASE$2"; }
 F=set-fresh-session-0123456789abcdef; S=set-stale-session-0123456789abcdef
 TOKEN=123456789:AAAbbbCCCdddEEEfffGGGhhhIIIjjjKKK
 
@@ -53,17 +53,17 @@ out=$(post $F /api/settings/save '{"telegram":{"bot_token":"nope","chat_id":"42"
 case "$out" in *error*) ok "잘못된 봇 토큰 거부" ;; *) bad "형식 검사 ($out)";; esac
 out=$(post $F /api/settings/save "{\"telegram\":{\"bot_token\":\"$TOKEN\",\"chat_id\":\"42\"}}")
 case "$out" in *'"ok"'*) ok "텔레그램 설정 저장" ;; *) bad "저장 ($out)";; esac
-got=$(curl -s -H "Cookie: moat_session=$F" "$BASE/api/settings")
+got=$(curl -s -H "Cookie: douve_session=$F" "$BASE/api/settings")
 echo "$got" | grep -q "$TOKEN" && bad "봇 토큰이 API에 노출됨" || ok "봇 토큰은 일부만 표시"
 echo "$got" | grep -q '"enabled":true' && ok "알림 활성 표시" || bad "활성 표시 ($got)"
 out=$(post $F /api/settings/telegram-test '{}')
 case "$out" in *'"ok"'*) ok "테스트 발송 성공" ;; *) bad "테스트 발송 ($out)";; esac
-grep -q "/bot$TOKEN/sendMessage 42 \[Moat\] 테스트" "$DIR/tg.log" && ok "가짜 텔레그램이 받은 내용" || bad "수신 ($(cat "$DIR/tg.log"))"
+grep -q "/bot$TOKEN/sendMessage 42 \[Douve\] 테스트" "$DIR/tg.log" && ok "가짜 텔레그램이 받은 내용" || bad "수신 ($(cat "$DIR/tg.log"))"
 post $F /api/settings/save '{"telegram":{"chat_id":"-1"}}' >/dev/null
 out=$(post $F /api/settings/telegram-test '{}')
 case "$out" in *chat*) ok "잘못된 chat id 안내" ;; *) bad "실패 안내 ($out)";; esac
 out=$(post $F /api/settings/save '{"telegram":{"clear":true}}')
-grep -q '"enabled": false' <<<"$(curl -s -H "Cookie: moat_session=$F" "$BASE/api/settings" | python3 -c 'import json,sys; print(json.dumps(json.load(sys.stdin)["telegram"]))')" \
+grep -q '"enabled": false' <<<"$(curl -s -H "Cookie: douve_session=$F" "$BASE/api/settings" | python3 -c 'import json,sys; print(json.dumps(json.load(sys.stdin)["telegram"]))')" \
     && ok "텔레그램 끄기" || bad "끄기"
 out=$(post $F /api/invites/create '{"email":"friend@example.com"}')
 case "$out" in *"$BASE/invite#"*) ok "웹에서 초대 링크 생성" ;; *) bad "초대 ($out)";; esac
@@ -78,8 +78,8 @@ from http.server import BaseHTTPRequestHandler, HTTPServer
 class H(BaseHTTPRequestHandler):
     def do_POST(self):
         body = self.rfile.read(int(self.headers.get("Content-Length", 0))).decode()
-        rec = {"path": self.path, "body": body, "sig": self.headers.get("X-Moat-Signature", ""),
-               "ts": self.headers.get("X-Moat-Timestamp", ""), "prio": self.headers.get("Priority", ""),
+        rec = {"path": self.path, "body": body, "sig": self.headers.get("X-Douve-Signature", ""),
+               "ts": self.headers.get("X-Douve-Timestamp", ""), "prio": self.headers.get("Priority", ""),
                "auth": self.headers.get("Authorization", ""), "title": self.headers.get("Title", "")}
         open(sys.argv[2], "a").write(json.dumps(rec, ensure_ascii=False) + "\n")
         self.send_response(500 if self.path == "/broken" else 200); self.end_headers()
@@ -89,35 +89,35 @@ PY
 WP=18862
 python3 "$DIR/hook.py" $WP "$DIR/hook.log" &
 sleep 0.3
-out=$(post $S /api/channels/create "{\"kind\":\"webhook\",\"name\":\"hook\",\"config\":{\"url\":\"http://127.0.0.1:$WP/moat\",\"secret\":\"s3cr3t\"}}")
+out=$(post $S /api/channels/create "{\"kind\":\"webhook\",\"name\":\"hook\",\"config\":{\"url\":\"http://127.0.0.1:$WP/douve\",\"secret\":\"s3cr3t\"}}")
 case "$out" in *reauth_required*) ok "채널 추가는 패스키 재확인 필요" ;; *) bad "채널 재확인 ($out)";; esac
 out=$(post $F /api/channels/create '{"kind":"discord","config":{"url":"https://evil.example/api/webhooks/1/a"}}')
 case "$out" in *error*) ok "Discord가 아닌 주소 거부" ;; *) bad "주소 검사 ($out)";; esac
-out=$(post $F /api/channels/create "{\"kind\":\"webhook\",\"name\":\"hook\",\"config\":{\"url\":\"http://127.0.0.1:$WP/moat\",\"secret\":\"s3cr3t\"}}")
+out=$(post $F /api/channels/create "{\"kind\":\"webhook\",\"name\":\"hook\",\"config\":{\"url\":\"http://127.0.0.1:$WP/douve\",\"secret\":\"s3cr3t\"}}")
 HID=$(echo "$out" | python3 -c 'import json,sys; print(json.load(sys.stdin)["channel"]["id"])' 2>/dev/null)
 [ -n "$HID" ] && ok "웹훅 채널 추가" || bad "웹훅 추가 ($out)"
-out=$(post $F /api/channels/create "{\"kind\":\"ntfy\",\"name\":\"phone\",\"config\":{\"server\":\"http://127.0.0.1:$WP\",\"topic\":\"moat-secret-topic\",\"token\":\"tk_x\"}}")
+out=$(post $F /api/channels/create "{\"kind\":\"ntfy\",\"name\":\"phone\",\"config\":{\"server\":\"http://127.0.0.1:$WP\",\"topic\":\"douve-secret-topic\",\"token\":\"tk_x\"}}")
 NID=$(echo "$out" | python3 -c 'import json,sys; print(json.load(sys.stdin)["channel"]["id"])' 2>/dev/null)
-list=$(curl -s -H "Cookie: moat_session=$F" "$BASE/api/channels")
-echo "$list" | grep -q 's3cr3t\|moat-secret-topic\|tk_x' && bad "채널 목록에 비밀 노출" || ok "채널 목록은 비밀을 가림"
+list=$(curl -s -H "Cookie: douve_session=$F" "$BASE/api/channels")
+echo "$list" | grep -q 's3cr3t\|douve-secret-topic\|tk_x' && bad "채널 목록에 비밀 노출" || ok "채널 목록은 비밀을 가림"
 out=$(post $F /api/channels/test "{\"id\":$HID}")
 case "$out" in *'"ok"'*) ok "웹훅 테스트 발송" ;; *) bad "웹훅 테스트 ($out)";; esac
 python3 - "$DIR/hook.log" <<'PY' && ok "웹훅 본문·HMAC 서명" || bad "웹훅 서명 ($(cat "$DIR/hook.log"))"
 import hashlib, hmac, json, sys
-r = [json.loads(l) for l in open(sys.argv[1]) if '"/moat"' in l][-1]
+r = [json.loads(l) for l in open(sys.argv[1]) if '"/douve"' in l][-1]
 body = json.loads(r["body"])
-assert body["source"] == "moat" and "테스트" in body["text"]
+assert body["source"] == "douve" and "테스트" in body["text"]
 want = "sha256=" + hmac.new(b"s3cr3t", (r["ts"] + "." + r["body"]).encode(), hashlib.sha256).hexdigest()
 assert r["sig"] == want, (r["sig"], want)
 PY
 out=$(post $F /api/channels/test "{\"id\":$NID}")
-grep -q '"/moat-secret-topic".*"auth": "Bearer tk_x".*"title": "Moat"' "$DIR/hook.log" && ok "ntfy 토픽·토큰·제목" || bad "ntfy ($out $(cat "$DIR/hook.log"))"
+grep -q '"/douve-secret-topic".*"auth": "Bearer tk_x".*"title": "Douve"' "$DIR/hook.log" && ok "ntfy 토픽·토큰·제목" || bad "ntfy ($out $(cat "$DIR/hook.log"))"
 out=$(post $F /api/channels/create "{\"kind\":\"webhook\",\"name\":\"broken\",\"config\":{\"url\":\"http://127.0.0.1:$WP/broken\"}}")
 BID=$(echo "$out" | python3 -c 'import json,sys; print(json.load(sys.stdin)["channel"]["id"])' 2>/dev/null)
 out=$(post $F /api/channels/test "{\"id\":$BID}")
 case "$out" in *"HTTP 500"*) ok "실패한 채널은 이유 표시" ;; *) bad "실패 표시 ($out)";; esac
 post $F /api/channels/toggle "{\"id\":$NID,\"enabled\":false}" >/dev/null
-curl -s -H "Cookie: moat_session=$F" "$BASE/api/channels" | python3 -c "import json,sys; c=[x for x in json.load(sys.stdin)['channels'] if x['id']==$NID][0]; assert not c['enabled']" 2>/dev/null \
+curl -s -H "Cookie: douve_session=$F" "$BASE/api/channels" | python3 -c "import json,sys; c=[x for x in json.load(sys.stdin)['channels'] if x['id']==$NID][0]; assert not c['enabled']" 2>/dev/null \
     && ok "채널 끄기" || bad "채널 끄기"
 post $F /api/channels/delete "{\"id\":$BID}" >/dev/null
 [ "$(sqlite3 "$DIR/hub.db" "SELECT count(*) FROM notify_channels")" = 2 ] && ok "채널 삭제" || bad "채널 삭제"

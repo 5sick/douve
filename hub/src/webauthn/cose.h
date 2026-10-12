@@ -7,7 +7,7 @@
 #include <optional>
 #include <string>
 
-namespace moat::webauthn {
+namespace douve::webauthn {
 
 inline constexpr int kAlgES256 = -7;
 inline constexpr int kAlgEdDSA = -8;
@@ -27,4 +27,4 @@ std::optional<CoseKey> parseCoseKey(const std::uint8_t* data, std::size_t len,
 // message에 대한 서명 검증 (ES256은 DER 인코딩 ECDSA 서명).
 bool verifySignature(const CoseKey& key, const Bytes& message, const Bytes& signature);
 
-} // namespace moat::webauthn
+} // namespace douve::webauthn

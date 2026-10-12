@@ -12,11 +12,11 @@
 #include <ctime>
 #include <iostream>
 
-namespace moat {
+namespace douve {
 namespace {
 
 const char* kUsage =
-    "사용: moat-hub invite --email 주소 [--hours 24] [--config /etc/moat/hub.json]\n";
+    "사용: douve-hub invite --email 주소 [--hours 24] [--config /etc/douve/hub.json]\n";
 
 void matchOwner(const std::string& dbPath) {
     struct stat st{};
@@ -33,7 +33,7 @@ void matchOwner(const std::string& dbPath) {
 } // namespace
 
 int runInvite(const std::vector<std::string>& args) {
-    std::string configPath = "/etc/moat/hub.json", email;
+    std::string configPath = "/etc/douve/hub.json", email;
     int hours = 24;
     for (std::size_t i = 0; i < args.size(); ++i) {
         const auto& a = args[i];
@@ -86,4 +86,4 @@ int runInvite(const std::vector<std::string>& args) {
     return 0;
 }
 
-} // namespace moat
+} // namespace douve

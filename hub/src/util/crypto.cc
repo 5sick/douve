@@ -7,7 +7,7 @@
 
 #include <stdexcept>
 
-namespace moat {
+namespace douve {
 
 Bytes randomBytes(std::size_t n) {
     Bytes b(n);
@@ -60,4 +60,4 @@ Bytes hmacSha256(std::string_view key, std::string_view message) {
     return Bytes(out, out + len);
 }
 
-} // namespace moat
+} // namespace douve

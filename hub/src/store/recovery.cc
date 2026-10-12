@@ -2,7 +2,7 @@
 
 #include "util/crypto.h"
 
-namespace moat {
+namespace douve {
 
 namespace {
 // 0/o, 1/l/i 처럼 헷갈리는 글자를 뺀 31자
@@ -88,4 +88,4 @@ RecoveryStatus recoveryStatus(Database& db, std::int64_t userId) {
     return s;
 }
 
-} // namespace moat
+} // namespace douve

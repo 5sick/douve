@@ -4,7 +4,7 @@
 #include <cstddef>
 #include <string_view>
 
-namespace moat::assets {
+namespace douve::assets {
 
 struct Asset {
     const char* name;
@@ -15,4 +15,4 @@ struct Asset {
 
 const Asset* find(std::string_view name);
 
-} // namespace moat::assets
+} // namespace douve::assets

@@ -6,7 +6,7 @@
 #include <utility>
 #include <vector>
 
-namespace moat {
+namespace douve {
 
 // 바깥으로 나가는 HTTP(S) 요청 (Google 토큰·JWKS 등).
 // Ubuntu 패키지의 Drogon/trantor는 TLS 없이 빌드되어 있어 https 주소도 평문으로 보내므로
@@ -48,4 +48,4 @@ void httpGlobalInit();
 // 링크된 libcurl이 TLS를 지원하는지 (https 요청이 평문으로 새지 않는다는 보장).
 bool httpsSupported();
 
-} // namespace moat
+} // namespace douve

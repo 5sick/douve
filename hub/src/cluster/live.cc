@@ -3,7 +3,7 @@
 #include <algorithm>
 #include <cmath>
 
-namespace moat {
+namespace douve {
 namespace {
 
 bool num(const Json::Value& v) {
@@ -171,4 +171,4 @@ std::vector<std::pair<std::int64_t, MetricRow>> LiveState::drainMinute(std::int6
     return out;
 }
 
-} // namespace moat
+} // namespace douve

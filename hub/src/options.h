@@ -5,9 +5,9 @@
 #include <string>
 #include <vector>
 
-namespace moat {
+namespace douve {
 
-// moat-hub 명령줄 옵션. 대부분의 설정은 설정 파일(--config)에서 읽고,
+// douve-hub 명령줄 옵션. 대부분의 설정은 설정 파일(--config)에서 읽고,
 // --listen은 설정 파일 값을 덮어쓴다.
 struct Options {
     std::string configPath;
@@ -23,4 +23,4 @@ std::optional<Options> parseOptions(const std::vector<std::string>& args, std::s
 
 std::string usage();
 
-} // namespace moat
+} // namespace douve

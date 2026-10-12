@@ -8,7 +8,7 @@
 
 #include <drogon/drogon.h>
 
-namespace moat {
+namespace douve {
 
 using drogon::HttpRequestPtr;
 using drogon::HttpResponsePtr;
@@ -207,4 +207,4 @@ void HubApp::registerAccountRoutes() {
                         {drogon::Post});
 }
 
-} // namespace moat
+} // namespace douve

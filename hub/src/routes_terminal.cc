@@ -14,7 +14,7 @@
 #include <regex>
 #include <sstream>
 
-namespace moat {
+namespace douve {
 
 using drogon::HttpRequestPtr;
 using drogon::HttpResponse;
@@ -54,7 +54,7 @@ void HubApp::registerTerminalRoutes() {
             if (!n)
                 return cb(error(drogon::k404NotFound, "노드를 찾을 수 없습니다"));
             if (!live_.connected(n->id))
-                return cb(error(drogon::k409Conflict, "서버가 Moat에 접속해 있지 않습니다"));
+                return cb(error(drogon::k409Conflict, "서버가 Douve에 접속해 있지 않습니다"));
             const std::string user = (*body).get("user", "").asString();
             auto inv = live_.inventory(n->id);
             bool allowed = false;
@@ -172,4 +172,4 @@ void HubApp::registerTerminalRoutes() {
         {drogon::Get});
 }
 
-} // namespace moat
+} // namespace douve

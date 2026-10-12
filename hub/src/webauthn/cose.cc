@@ -9,7 +9,7 @@
 
 #include <memory>
 
-namespace moat::webauthn {
+namespace douve::webauthn {
 namespace {
 
 struct ItemDeleter {
@@ -146,4 +146,4 @@ bool verifySignature(const CoseKey& key, const Bytes& message, const Bytes& sign
     }
 }
 
-} // namespace moat::webauthn
+} // namespace douve::webauthn

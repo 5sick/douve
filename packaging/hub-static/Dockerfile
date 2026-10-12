@@ -1,6 +1,6 @@
-# 배포판과 무관하게 실행되는 moat-hub 정적 바이너리 (musl, 의존 라이브러리 전부 포함).
+# 배포판과 무관하게 실행되는 douve-hub 정적 바이너리 (musl, 의존 라이브러리 전부 포함).
 #   docker build -f packaging/hub-static/Dockerfile -o dist .
-# 결과: dist/moat-hub-linux-<arch>
+# 결과: dist/douve-hub-linux-<arch>
 FROM alpine:3.22 AS deps
 RUN apk add --no-cache build-base cmake ninja git pkgconf linux-headers perl \
         openssl-dev openssl-libs-static zlib-dev zlib-static sqlite-dev sqlite-static \
@@ -40,18 +40,18 @@ RUN git clone --depth 1 --branch v1.9.11 --recurse-submodules --shallow-submodul
 
 FROM deps AS build
 ARG VERSION=0.0.0-dev
-COPY hub /src/moat/hub
-COPY web /src/moat/web
-RUN cmake -S /src/moat/hub -B /src/moat/b -G Ninja -DCMAKE_BUILD_TYPE=Release -DMOAT_STATIC=ON \
-      -DMOAT_BUILD_TESTS=OFF -DMOAT_VERSION=${VERSION} && \
-    cmake --build /src/moat/b --target moat-hub && \
-    strip /src/moat/b/moat-hub && \
-    file /src/moat/b/moat-hub && /src/moat/b/moat-hub --version && \
-    mkdir /out && cp /src/moat/b/moat-hub /out/moat-hub-linux-$(uname -m | sed 's/x86_64/amd64/; s/aarch64/arm64/')
+COPY hub /src/douve/hub
+COPY web /src/douve/web
+RUN cmake -S /src/douve/hub -B /src/douve/b -G Ninja -DCMAKE_BUILD_TYPE=Release -DDOUVE_STATIC=ON \
+      -DDOUVE_BUILD_TESTS=OFF -DDOUVE_VERSION=${VERSION} && \
+    cmake --build /src/douve/b --target douve-hub && \
+    strip /src/douve/b/douve-hub && \
+    file /src/douve/b/douve-hub && /src/douve/b/douve-hub --version && \
+    mkdir /out && cp /src/douve/b/douve-hub /out/douve-hub-linux-$(uname -m | sed 's/x86_64/amd64/; s/aarch64/arm64/')
 
 # 정적 바이너리에 함께 들어간 라이브러리의 라이선스 고지 (릴리스에 같이 배포)
 RUN apk add --no-cache curl musl-dev && cd /src && { \
-      echo "Third-party software statically linked into moat-hub"; echo; \
+      echo "Third-party software statically linked into douve-hub"; echo; \
       for c in "jsoncpp 1.9.6|MIT / Public Domain|jsoncpp/LICENSE" \
                "libcbor 0.12.0|MIT|libcbor/LICENSE.md" \
                "curl 8.15.0|curl (MIT-style)|curl/COPYING" \
@@ -71,7 +71,7 @@ RUN apk add --no-cache curl musl-dev && cd /src && { \
       echo "================================================================"; echo "musl libc — MIT"; echo; \
       curl -fsSL "https://git.musl-libc.org/cgit/musl/plain/COPYRIGHT"; echo; \
       echo "================================================================"; echo "Web UI components (embedded)"; echo; \
-      cat /src/moat/web/THIRD_PARTY_LICENSES.md; \
+      cat /src/douve/web/THIRD_PARTY_LICENSES.md; \
     } > /out/THIRD_PARTY_LICENSES-hub.txt && test -s /out/THIRD_PARTY_LICENSES-hub.txt
 
 FROM scratch

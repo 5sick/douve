@@ -10,7 +10,7 @@
 #include <map>
 #include <sstream>
 
-namespace moat {
+namespace douve {
 
 namespace {
 constexpr std::size_t kMaxIcon = 512 * 1024;
@@ -107,4 +107,4 @@ std::string dashboardIconUrl(const std::string& name, bool svg) {
            (svg ? "svg/" : "png/") + name + (svg ? ".svg" : ".png");
 }
 
-} // namespace moat
+} // namespace douve

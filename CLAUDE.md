@@ -1,6 +1,6 @@
 # CLAUDE.md
 
-Moat: 개인 서버 관리 도구. Hub(C++20/Drogon) + Agent(Go). 설계는 docs/ 참고.
+Douve: 개인 서버 관리 도구. Hub(C++20/Drogon) + Agent(Go). 설계는 docs/ 참고.
 
 ## 명령
 - `make test` — 전체 테스트 (변경 후 반드시 실행)

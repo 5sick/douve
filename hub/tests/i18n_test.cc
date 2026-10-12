@@ -1,7 +1,7 @@
 #include "testing.h"
 #include "util/i18n.h"
 
-using namespace moat;
+using namespace douve;
 
 TEST(i18n_builtin_dictionary) {
     using i18n::translate;

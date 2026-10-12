@@ -14,7 +14,7 @@
 #include <set>
 #include <sstream>
 
-namespace moat {
+namespace douve {
 
 using drogon::HttpRequestPtr;
 using drogon::HttpResponsePtr;
@@ -57,7 +57,7 @@ Json::Value HubApp::buildRoutes() {
     r["login_url"] = cfg_.publicUrl + "/login";
     r["acme_email"] = cfg_.allowedEmails.empty() ? "" : cfg_.allowedEmails.front();
     r["routes"] = Json::Value(Json::arrayValue);
-    // Hub 자신 (로그인 화면). 쿠키를 그대로 전달하고 Moat 검사는 하지 않는다.
+    // Hub 자신 (로그인 화면). 쿠키를 그대로 전달하고 Douve 검사는 하지 않는다.
     Json::Value hub;
     hub["host"] = hostOfUrl(cfg_.publicUrl);
     hub["upstream"] = hostPortOfUrl(cfg_.effectiveInternalUrl());
@@ -97,13 +97,13 @@ Json::Value HubApp::buildRoutes() {
 std::string HubApp::tunnelUrl() const {
     if (!cfg_.tunnelUrl.empty())
         return cfg_.tunnelUrl;
-    // https://host → wss://host/_moat/tunnel (입구가 모든 도메인에서 이 경로를 받는다)
+    // https://host → wss://host/_douve/tunnel (입구가 모든 도메인에서 이 경로를 받는다)
     std::string u = cfg_.publicUrl;
     if (u.rfind("https://", 0) == 0)
         u = "wss://" + u.substr(8);
     else if (u.rfind("http://", 0) == 0)
         u = "ws://" + u.substr(7);
-    return u + "/_moat/tunnel";
+    return u + "/_douve/tunnel";
 }
 
 Json::Value HubApp::buildTunnelConfig(const Node& n) {
@@ -487,4 +487,4 @@ void HubApp::registerServiceRoutes() {
                         {drogon::Post});
 }
 
-} // namespace moat
+} // namespace douve

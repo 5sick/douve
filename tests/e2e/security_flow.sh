@@ -1,12 +1,12 @@
 #!/bin/bash
 # 보안 감시 E2E: Hub + Agent(시험용 journald 파일·감시 파일) + 가짜 텔레그램.
 # 첫 발생 알림 → 반복은 조용 → "문제 없음" 후 무시 → 관리 계정 sudo는 기록만 → 중요 파일 변경 알림 → 다시 알리기.
-# 사용: tests/e2e/security_flow.sh [moat-hub 경로] [dist 디렉터리]
+# 사용: tests/e2e/security_flow.sh [douve-hub 경로] [dist 디렉터리]
 set -u
-export MOAT_LANG=ko # CLI 출력 언어 고정 (영어 확인은 따로)
-HUB=${1:-build/hub/moat-hub}
+export DOUVE_LANG=ko # CLI 출력 언어 고정 (영어 확인은 따로)
+HUB=${1:-build/hub/douve-hub}
 DIST=$(cd "${2:-dist}" && pwd)
-AGENT="$DIST/moat-agent-linux-$(uname -m | sed 's/x86_64/amd64/; s/aarch64/arm64/')"
+AGENT="$DIST/douve-agent-linux-$(uname -m | sed 's/x86_64/amd64/; s/aarch64/arm64/')"
 HP=18880; TP=18881
 BASE="http://localhost:$HP"
 DIR=$(mktemp -d); trap 'kill $(jobs -p) 2>/dev/null; rm -rf "$DIR"' EXIT
@@ -41,7 +41,7 @@ db.execute("INSERT INTO sessions VALUES (?, 1, 'passkey', ?, ?, ?, ?, ?, '', '',
            (hashlib.sha256(b"sec-fresh-session-0123456789abcdef").digest(), now, now, now + 3600, now + 7200, now))
 db.commit()
 PY
-S="moat_session=sec-fresh-session-0123456789abcdef"
+S="douve_session=sec-fresh-session-0123456789abcdef"
 post() { curl -s -X POST -H "Cookie: $S" -H "Origin: $BASE" -H 'Content-Type: application/json' -d "$2" "$BASE$1"; }
 issues() { curl -s -H "Cookie: $S" "$BASE/api/security"; }
 J="$DIR/journal"; W="$DIR/authorized_keys"
@@ -50,8 +50,8 @@ ME=$(id -un)
 # root로 돌면(CI 컨테이너) Agent는 sudo 그룹의 일반 계정(uid 1000+)만 관리 계정으로 본다 → 하나 만든다
 if [ "$(id -u)" = 0 ]; then
     getent group sudo >/dev/null || groupadd sudo
-    id -u moatci >/dev/null 2>&1 || useradd -m -u 1500 -G sudo -s /bin/bash moatci
-    ME=moatci
+    id -u douveci >/dev/null 2>&1 || useradd -m -u 1500 -G sudo -s /bin/bash douveci
+    ME=douveci
 fi
 jl() { python3 -c 'import json,sys,time; print(json.dumps({"SYSLOG_IDENTIFIER":sys.argv[1],"MESSAGE":sys.argv[2],"__REALTIME_TIMESTAMP":str(int(time.time()*1e6)),"__CURSOR":"c"}))' "$1" "$2" >> "$J"; }
 wait_tg() { for _ in $(seq 60); do [ "$(wc -l < "$DIR/tg.log" 2>/dev/null || echo 0)" -ge "$1" ] && return 0; sleep 0.1; done; return 1; }
@@ -59,7 +59,7 @@ wait_text() { for _ in $(seq 60); do grep -q "$1" "$DIR/tg.log" 2>/dev/null && r
 
 TOKEN=$("$HUB" join-token --config "$DIR/hub.json" --name sec1 2>/dev/null | awk '{print $NF}')
 "$AGENT" join --dir "$DIR/agent" --hub "http://127.0.0.1:$HP" --token "$TOKEN" >/dev/null 2>&1
-MOAT_TEST_JOURNAL_FILE="$J" MOAT_TEST_WATCH_FILES="$W" MOAT_TEST_SECURITY_INTERVAL=500ms STATE_DIRECTORY="$DIR/state" \
+DOUVE_TEST_JOURNAL_FILE="$J" DOUVE_TEST_WATCH_FILES="$W" DOUVE_TEST_SECURITY_INTERVAL=500ms STATE_DIRECTORY="$DIR/state" \
     "$AGENT" run --dir "$DIR/agent" >"$DIR/agent.log" 2>&1 &
 for _ in $(seq 100); do curl -s -H "Cookie: $S" "$BASE/api/nodes/1" | grep -q "\"$ME\"" && break; sleep 0.1; done
 sleep 1

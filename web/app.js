@@ -1,5 +1,5 @@
 'use strict';
-// Moat 웹 UI. 외부 라이브러리 없이 WebAuthn을 호출한다.
+// Douve 웹 UI. 외부 라이브러리 없이 WebAuthn을 호출한다.
 
 const $ = (id) => document.getElementById(id);
 
@@ -38,7 +38,7 @@ function show(msg, kind = 'error') {
 
 function fmtTime(ts) {
   if (!ts) return '없음';
-  return new Date(ts * 1000).toLocaleString(window.moatLocale, { dateStyle: 'medium', timeStyle: 'short' });
+  return new Date(ts * 1000).toLocaleString(window.douveLocale, { dateStyle: 'medium', timeStyle: 'short' });
 }
 
 const passkeySupported = () => !!(window.PublicKeyCredential && navigator.credentials);
@@ -272,10 +272,10 @@ function initRecoveryCodes() {
     try { await navigator.clipboard.writeText($('codes').textContent); show('복사했습니다.', 'ok'); } catch (_) { show('복사하지 못했습니다. 직접 선택해 복사하세요.'); }
   });
   $('save-codes').addEventListener('click', () => {
-    const text = `${window.t(`Moat 복구 코드 (${location.host})`)}\n${window.t('한 번씩만 쓸 수 있습니다. 로그인 화면 → "복구 코드로 로그인"')}\n\n${$('codes').textContent}\n`;
+    const text = `${window.t(`Douve 복구 코드 (${location.host})`)}\n${window.t('한 번씩만 쓸 수 있습니다. 로그인 화면 → "복구 코드로 로그인"')}\n\n${$('codes').textContent}\n`;
     const a = document.createElement('a');
     a.href = URL.createObjectURL(new Blob([text], { type: 'text/plain' }));
-    a.download = `moat-recovery-codes-${location.host}.txt`;
+    a.download = `douve-recovery-codes-${location.host}.txt`;
     a.click();
     setTimeout(() => URL.revokeObjectURL(a.href), 1000);
   });
@@ -316,7 +316,7 @@ async function initInvite() {
   history.replaceState(null, '', '/invite'); // 주소창·방문 기록에서 토큰 제거
   if (!token) { $('invite-sub').textContent = '초대 링크가 올바르지 않습니다.'; return; }
   if (!passkeySupported()) { $('invite-sub').textContent = '이 브라우저는 패스키를 지원하지 않습니다. 최신 브라우저로 여세요.'; return; }
-  $('invite-sub').textContent = 'Moat에 초대되었습니다. 이 기기에 패스키를 만들면 바로 시작합니다.';
+  $('invite-sub').textContent = 'Douve에 초대되었습니다. 이 기기에 패스키를 만들면 바로 시작합니다.';
   $('invite-name-box').hidden = false;
   $('invite-accept').hidden = false;
   $('invite-help').hidden = false;
@@ -365,9 +365,9 @@ function langSwitch() {
   b.type = 'button';
   b.className = 'lang-switch';
   b.dataset.noI18n = '';
-  const other = window.moatLang === 'en' ? 'ko' : 'en';
+  const other = window.douveLang === 'en' ? 'ko' : 'en';
   b.textContent = other === 'en' ? 'English' : '한국어';
-  b.addEventListener('click', () => window.setMoatLang(other));
+  b.addEventListener('click', () => window.setDouveLang(other));
   return b;
 }
 
@@ -382,7 +382,7 @@ function mountShell(active) {
   logo.className = 'logo';
   logo.src = '/favicon.svg';
   logo.alt = '';
-  brand.append(logo, 'Moat');
+  brand.append(logo, 'Douve');
   side.append(brand);
   const counts = {};
   for (const n of NAV) {

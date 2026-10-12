@@ -11,7 +11,7 @@
 #include <string>
 #include <vector>
 
-namespace moat {
+namespace douve {
 
 struct Channel {
     std::int64_t id = 0;
@@ -37,4 +37,4 @@ Json::Value channelJson(const Channel& c);
 // 보낼 요청 (now: 웹훅 서명 시각)
 HttpPost channelRequest(const Channel& c, const std::string& text, std::int64_t now);
 
-} // namespace moat
+} // namespace douve

@@ -39,6 +39,14 @@ try {
   Object.keys(left).length === 0 ? ok('영어 화면에 한국어 없음 (8개 화면)') : bad(`남은 한국어: ${JSON.stringify(left)}`);
   errs.length === 0 ? ok('영어 화면 스크립트 오류 없음') : bad(errs.join(' | '));
 
+  // 메뉴 이름 (사전 값이 다른 곳에서 덮어써지지 않았는지)
+  const nav = await ctx.newPage();
+  await nav.goto(`${BASE}/`);
+  const labels = (await nav.locator('.side .nav-item span:not(.count)').allInnerTexts()).map((s) => s.trim());
+  JSON.stringify(labels) === JSON.stringify(['Home', 'Servers', 'Services', 'Security', 'Settings', 'Account'])
+    ? ok('영어 메뉴 이름') : bad(`메뉴 이름 ${JSON.stringify(labels)}`);
+  await nav.close();
+
   // 언어 바꾸기 → 한국어
   const page = await ctx.newPage();
   await page.goto(`${BASE}/services`);

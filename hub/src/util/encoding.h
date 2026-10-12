@@ -6,7 +6,7 @@
 #include <string_view>
 #include <vector>
 
-namespace moat {
+namespace douve {
 
 using Bytes = std::vector<std::uint8_t>;
 
@@ -34,4 +34,4 @@ inline std::string toString(const Bytes& b) {
     return std::string(b.begin(), b.end());
 }
 
-} // namespace moat
+} // namespace douve

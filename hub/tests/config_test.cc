@@ -1,11 +1,11 @@
 #include "config.h"
 #include "testing.h"
 
-using namespace moat;
+using namespace douve;
 
 namespace {
 const char* kValid = R"({
-  "public_url": "https://moat.example.com/",
+  "public_url": "https://douve.example.com/",
   "cookie_domain": ".example.com",
   "google": {"client_id": "cid", "client_secret": "sec"},
   "allowed_emails": ["Me@Example.com"],
@@ -19,10 +19,10 @@ TEST(config_parse_valid) {
     CHECK(c.has_value());
     if (!c)
         return;
-    CHECK_EQ(c->publicUrl, "https://moat.example.com");
+    CHECK_EQ(c->publicUrl, "https://douve.example.com");
     CHECK_EQ(c->cookieDomain, "example.com");
     CHECK_EQ(c->effectiveRpId(), "example.com");
-    CHECK_EQ(c->origin(), "https://moat.example.com");
+    CHECK_EQ(c->origin(), "https://douve.example.com");
     CHECK_EQ(c->redirectHostSuffix, ".example.com");
     CHECK_EQ(c->allowedEmails.size(), 1u);
     CHECK_EQ(c->allowedEmails[0], "me@example.com");
@@ -33,16 +33,16 @@ TEST(config_parse_valid) {
 TEST(config_reject_invalid) {
     std::string err;
     CHECK(!parseConfig("{", err));
-    CHECK(!parseConfig(R"({"public_url":"http://moat.example.com","cookie_domain":"example.com"})",
+    CHECK(!parseConfig(R"({"public_url":"http://douve.example.com","cookie_domain":"example.com"})",
                        err));
-    CHECK(!parseConfig(R"({"public_url":"https://moat.example.com"})", err));
-    CHECK(!parseConfig(R"({"public_url":"https://moat.evil.com","cookie_domain":"example.com"})",
+    CHECK(!parseConfig(R"({"public_url":"https://douve.example.com"})", err));
+    CHECK(!parseConfig(R"({"public_url":"https://douve.evil.com","cookie_domain":"example.com"})",
                        err));
     CHECK(!parseConfig(
-        R"({"public_url":"https://moat.example.com","cookie_domain":"example.com","rp_id":"other.com"})",
+        R"({"public_url":"https://douve.example.com","cookie_domain":"example.com","rp_id":"other.com"})",
         err));
     CHECK(!parseConfig(
-        R"({"public_url":"https://moat.example.com","cookie_domain":"example.com","session_idle_days":40,"session_max_days":10})",
+        R"({"public_url":"https://douve.example.com","cookie_domain":"example.com","session_idle_days":40,"session_max_days":10})",
         err));
     CHECK(parseConfig(R"({"public_url":"http://localhost:8700","cookie_domain":"localhost"})", err)
               .has_value());

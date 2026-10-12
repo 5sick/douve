@@ -1,9 +1,9 @@
-// moat-agent는 각 노드에서 실행되어 Hub에 먼저 연결(outbound)하는 에이전트다.
+// douve-agent는 각 노드에서 실행되어 Hub에 먼저 연결(outbound)하는 에이전트다.
 //
-//	moat-agent join --hub <주소> --token <토큰>   이 서버를 Hub에 등록
-//	moat-agent run                               Hub에 접속해 상태 전송 (systemd가 실행)
-//	moat-agent install-service                   systemd 유닛 설치
-//	moat-agent status                            등록 정보 출력
+//	douve-agent join --hub <주소> --token <토큰>   이 서버를 Hub에 등록
+//	douve-agent run                               Hub에 접속해 상태 전송 (systemd가 실행)
+//	douve-agent install-service                   systemd 유닛 설치
+//	douve-agent status                            등록 정보 출력
 package main
 
 import (
@@ -23,37 +23,37 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/5sick/moat/agent/internal/client"
-	"github.com/5sick/moat/agent/internal/collect"
-	"github.com/5sick/moat/agent/internal/config"
-	"github.com/5sick/moat/agent/internal/ctl"
-	"github.com/5sick/moat/agent/internal/edge"
-	"github.com/5sick/moat/agent/internal/features"
-	"github.com/5sick/moat/agent/internal/health"
-	"github.com/5sick/moat/agent/internal/i18n"
-	"github.com/5sick/moat/agent/internal/install"
-	"github.com/5sick/moat/agent/internal/portmap"
-	"github.com/5sick/moat/agent/internal/security"
-	"github.com/5sick/moat/agent/internal/service"
-	"github.com/5sick/moat/agent/internal/term"
-	"github.com/5sick/moat/agent/internal/tunnel"
-	"github.com/5sick/moat/agent/internal/update"
-	"github.com/5sick/moat/agent/internal/version"
+	"github.com/5sick/douve/agent/internal/client"
+	"github.com/5sick/douve/agent/internal/collect"
+	"github.com/5sick/douve/agent/internal/config"
+	"github.com/5sick/douve/agent/internal/ctl"
+	"github.com/5sick/douve/agent/internal/edge"
+	"github.com/5sick/douve/agent/internal/features"
+	"github.com/5sick/douve/agent/internal/health"
+	"github.com/5sick/douve/agent/internal/i18n"
+	"github.com/5sick/douve/agent/internal/install"
+	"github.com/5sick/douve/agent/internal/portmap"
+	"github.com/5sick/douve/agent/internal/security"
+	"github.com/5sick/douve/agent/internal/service"
+	"github.com/5sick/douve/agent/internal/term"
+	"github.com/5sick/douve/agent/internal/tunnel"
+	"github.com/5sick/douve/agent/internal/update"
+	"github.com/5sick/douve/agent/internal/version"
 )
 
 func usage() {
 	fmt.Fprint(os.Stderr, i18n.T(`사용법:
-  moat-agent install [--mode tailscale|public] [--domain 주소] [--email 이메일]
-                    [--features recommended|custom] [--yes] [--from 폴더]   (빈 서버에 Moat 설치)
-  moat-agent join --hub <Hub 주소> --token <토큰> [--force]
-  moat-agent run
-  moat-agent expose <포트> [--name 이름] [--host 도메인] [--path /경로] [--public]
-  moat-agent unexpose <이름>
-  moat-agent exposed
-  moat-agent install-service
-  moat-agent status
-  moat-agent version
-공통 옵션: --dir <설정 디렉터리> (기본 /etc/moat-agent)
+  douve-agent install [--mode tailscale|public] [--domain 주소] [--email 이메일]
+                    [--features recommended|custom] [--yes] [--from 폴더]   (빈 서버에 Douve 설치)
+  douve-agent join --hub <Hub 주소> --token <토큰> [--force]
+  douve-agent run
+  douve-agent expose <포트> [--name 이름] [--host 도메인] [--path /경로] [--public]
+  douve-agent unexpose <이름>
+  douve-agent exposed
+  douve-agent install-service
+  douve-agent status
+  douve-agent version
+공통 옵션: --dir <설정 디렉터리> (기본 /etc/douve-agent)
 `))
 }
 
@@ -65,7 +65,7 @@ func main() {
 	cmd, args := os.Args[1], os.Args[2:]
 	if cmd == "install" { // 자체 옵션을 쓴다
 		if err := runInstall(args); err != nil {
-			fmt.Fprintln(os.Stderr, "moat-agent install:", err)
+			fmt.Fprintln(os.Stderr, "douve-agent install:", err)
 			os.Exit(1)
 		}
 		return
@@ -111,7 +111,7 @@ func main() {
 		os.Exit(2)
 	}
 	if err != nil {
-		fmt.Fprintln(os.Stderr, "moat-agent:", err)
+		fmt.Fprintln(os.Stderr, "douve-agent:", err)
 		os.Exit(1)
 	}
 }
@@ -154,7 +154,7 @@ func runCtl(cmd string, args []string) error {
 	name := fs.String("name", "", i18n.T("서비스 이름 (기본: 포트를 쓰는 프로세스·컨테이너 이름)"))
 	host := fs.String("host", "", i18n.T("공개 도메인 (기본: <이름>.<기본 도메인>)"))
 	path := fs.String("path", "", i18n.T("경로 접두사 (예: /api)"))
-	public := fs.Bool("public", false, i18n.T("로그인 없이 누구나 (기본: Moat 로그인 필요)"))
+	public := fs.Bool("public", false, i18n.T("로그인 없이 누구나 (기본: Douve 로그인 필요)"))
 	var positional []string
 	// 플래그와 위치 인자를 섞어 쓸 수 있게 (expose 3000 --public)
 	rest := args
@@ -167,14 +167,14 @@ func runCtl(cmd string, args []string) error {
 		}
 	}
 	req := ctl.Request{Lang: i18n.Lang(), Op: map[string]string{"expose": "expose", "unexpose": "unexpose", "exposed": "list"}[cmd],
-		Name: *name, Host: *host, Path: *path, Auth: "moat"}
+		Name: *name, Host: *host, Path: *path, Auth: "douve"}
 	if *public {
 		req.Auth = "public"
 	}
 	switch cmd {
 	case "expose":
 		if len(positional) != 1 {
-			return errors.New(i18n.T("사용: moat-agent expose <포트> [--name 이름] [--host 도메인] [--path /경로] [--public]"))
+			return errors.New(i18n.T("사용: douve-agent expose <포트> [--name 이름] [--host 도메인] [--path /경로] [--public]"))
 		}
 		port, err := strconv.Atoi(positional[0])
 		if err != nil || port < 1 || port > 65535 {
@@ -183,7 +183,7 @@ func runCtl(cmd string, args []string) error {
 		req.Port = port
 	case "unexpose":
 		if len(positional) != 1 {
-			return errors.New(i18n.T("사용: moat-agent unexpose <이름>"))
+			return errors.New(i18n.T("사용: douve-agent unexpose <이름>"))
 		}
 		req.Name = positional[0]
 	}
@@ -200,8 +200,8 @@ func runCtl(cmd string, args []string) error {
 		if resp.Warning != "" {
 			fmt.Println(i18n.T("주의:"), resp.Warning)
 		}
-		if req.Auth == "moat" {
-			fmt.Println(i18n.T("(Moat 로그인 필요. 누구나 열게 하려면 --public)"))
+		if req.Auth == "douve" {
+			fmt.Println(i18n.T("(Douve 로그인 필요. 누구나 열게 하려면 --public)"))
 		}
 	case "unexpose":
 		fmt.Println(i18n.T("공개 해제됨"))
@@ -288,7 +288,7 @@ func run(paths config.Paths, log *slog.Logger) error {
 	}
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
-	log.Info("moat-agent 시작", "version", version.Version, "node", c.Name, "hub", c.HubURL)
+	log.Info("douve-agent 시작", "version", version.Version, "node", c.Name, "hub", c.HubURL)
 
 	// 입구(edge) 역할: Hub가 라우팅 표를 보내면 시작. 저장된 표가 있으면 Hub 접속 전에도 바로 서비스.
 	edgeCfg, err := edge.LoadConfig(filepath.Join(paths.Dir, "edge.json"))
@@ -320,7 +320,7 @@ func run(paths config.Paths, log *slog.Logger) error {
 		sec := security.New(update.StateDir(), terms.TTYOwner)
 		sec.Enabled = func(kind string) bool { return features.Get().SecurityKind(kind) }
 		interval := 30 * time.Second
-		if d, err := time.ParseDuration(os.Getenv("MOAT_TEST_SECURITY_INTERVAL")); err == nil && d > 0 {
+		if d, err := time.ParseDuration(os.Getenv("DOUVE_TEST_SECURITY_INTERVAL")); err == nil && d > 0 {
 			interval = d
 		}
 		go func() {
@@ -348,7 +348,7 @@ func run(paths config.Paths, log *slog.Logger) error {
 		}()
 	}
 
-	// 같은 서버의 root가 쓰는 제어 소켓 (moat-agent expose 등) → Hub에 물어서 답한다
+	// 같은 서버의 root가 쓰는 제어 소켓 (douve-agent expose 등) → Hub에 물어서 답한다
 	reqs := &pendingReqs{m: map[string]chan json.RawMessage{}}
 	_ = ctl.Serve(ctx, update.StateDir(), func(rctx context.Context, req ctl.Request) ctl.Response {
 		rid := fmt.Sprintf("%d", time.Now().UnixNano())
@@ -380,7 +380,7 @@ func run(paths config.Paths, log *slog.Logger) error {
 		lastPortmap.Store(s)
 		_ = hub.send(map[string]any{"type": "portmap_status", "status": s})
 	})
-	if a := os.Getenv("MOAT_TEST_NATPMP"); a != "" { // 시험용: 가짜 공유기
+	if a := os.Getenv("DOUVE_TEST_NATPMP"); a != "" { // 시험용: 가짜 공유기
 		pm.Opts = portmap.Options{Gateway: net.ParseIP("127.0.0.1"), NATPMP: a, SSDP: "127.0.0.1:9", Timeout: time.Second}
 	}
 	go pm.Run(ctx)
@@ -512,7 +512,7 @@ func runInstall(args []string) error {
 	fs := flag.NewFlagSet("install", flag.ExitOnError)
 	var o install.Options
 	fs.StringVar(&o.Mode, "mode", "", "tailscale (Tailscale 안에서만) | public (내 도메인으로 공개)")
-	fs.StringVar(&o.Domain, "domain", "", "public: Moat 주소 (예: moat.example.com)")
+	fs.StringVar(&o.Domain, "domain", "", "public: Douve 주소 (예: douve.example.com)")
 	fs.StringVar(&o.Email, "email", "", "관리자 이메일")
 	fs.StringVar(&o.Features, "features", "", "recommended | custom")
 	fs.BoolVar(&o.Yes, "yes", false, "묻지 않고 추천값으로")

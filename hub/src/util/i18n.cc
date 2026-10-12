@@ -12,7 +12,7 @@
 #include <sstream>
 #include <vector>
 
-namespace moat::i18n {
+namespace douve::i18n {
 
 namespace {
 
@@ -259,4 +259,4 @@ std::string translate(const std::string& text, const std::string& lang) {
     return tr(*dict(), text, 0);
 }
 
-} // namespace moat::i18n
+} // namespace douve::i18n

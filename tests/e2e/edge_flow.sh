@@ -1,12 +1,12 @@
 #!/bin/bash
-# 입구(edge) E2E: moat-hub + edge 역할 moat-agent(TLS 없는 시험 모드) + 가짜 업스트림.
+# 입구(edge) E2E: douve-hub + edge 역할 douve-agent(TLS 없는 시험 모드) + 가짜 업스트림.
 # 서비스 등록 → 라우팅 표 전송 → 로그인 보호·예외 경로·공개 → Hub 장애 시 동작 → 재시작 후 저장된 표로 서비스.
-# 사용: tests/e2e/edge_flow.sh [moat-hub 경로] [dist 디렉터리]
+# 사용: tests/e2e/edge_flow.sh [douve-hub 경로] [dist 디렉터리]
 set -u
-export MOAT_LANG=ko # CLI 출력 언어 고정 (영어 확인은 따로)
-HUB=${1:-build/hub/moat-hub}
+export DOUVE_LANG=ko # CLI 출력 언어 고정 (영어 확인은 따로)
+HUB=${1:-build/hub/douve-hub}
 DIST=$(cd "${2:-dist}" && pwd)
-AGENT="$DIST/moat-agent-linux-$(uname -m | sed 's/x86_64/amd64/; s/aarch64/arm64/')"
+AGENT="$DIST/douve-agent-linux-$(uname -m | sed 's/x86_64/amd64/; s/aarch64/arm64/')"
 HP=18840; EP=18841; UP=18842; AP=18843; NP=18844
 BASE="http://localhost:$HP"
 DIR=$(mktemp -d); trap 'kill $(jobs -p) 2>/dev/null; rm -rf "$DIR"' EXIT
@@ -22,7 +22,7 @@ from http.server import BaseHTTPRequestHandler, HTTPServer
 class H(BaseHTTPRequestHandler):
     def do_GET(self):
         b = json.dumps({"host": self.headers.get("Host"), "path": self.path,
-                        "cookie": self.headers.get("Cookie", ""), "user": self.headers.get("X-Moat-User", ""),
+                        "cookie": self.headers.get("Cookie", ""), "user": self.headers.get("X-Douve-User", ""),
                         "realip": self.headers.get("X-Real-IP", "")}).encode()
         self.send_response(200); self.send_header("Content-Type", "application/json"); self.end_headers(); self.wfile.write(b)
     def log_message(self, *a): pass
@@ -51,7 +51,7 @@ python3 -m http.server $AP --bind 127.0.0.1 --directory "$DIR" >/dev/null 2>&1 &
 cat > "$DIR/hub.json" <<JSON
 {"public_url":"$BASE","cookie_domain":"localhost","database_path":"$DIR/hub.db",
  "listen_port":$HP,"allowed_emails":["test@example.com"],"agent_dir":"$DIST",
- "tunnel_url":"ws://127.0.0.1:$EP/_moat/tunnel"}
+ "tunnel_url":"ws://127.0.0.1:$EP/_douve/tunnel"}
 JSON
 start_hub() { "$HUB" --config "$DIR/hub.json" >>"$DIR/hub.log" 2>&1 & HUB_PID=$!; for _ in $(seq 50); do curl -sf "$BASE/healthz" >/dev/null && break; sleep 0.1; done; }
 start_hub
@@ -64,7 +64,7 @@ db.execute("INSERT INTO sessions VALUES (?, 1, 'passkey', ?, ?, ?, ?, ?, '', '',
            (hashlib.sha256(b"edge-session-token-0123456789abcdef").digest(), now, now, now + 3600, now + 7200, now))
 db.commit()
 PY
-SESSION="moat_session=edge-session-token-0123456789abcdef"
+SESSION="douve_session=edge-session-token-0123456789abcdef"
 post() { curl -s -X POST -H "Cookie: $SESSION" -H "Origin: $BASE" -H 'Content-Type: application/json' -d "$2" "$BASE$1"; }
 edge() { # host path [cookie] → "코드 Location 본문"
     curl -s -o "$DIR/body" -w '%{http_code} %{redirect_url}' -H "Host: $1" ${3:+-H "Cookie: $3"} "http://127.0.0.1:$EP$2"
@@ -76,12 +76,12 @@ A="$DIR/agent"
 TOKEN=$("$HUB" join-token --config "$DIR/hub.json" --name edge1 2>/dev/null | awk '{print $NF}')
 "$AGENT" join --dir "$A" --hub "http://127.0.0.1:$HP" --token "$TOKEN" >/dev/null 2>&1 || bad "join"
 echo "{\"http_addr\":\"127.0.0.1:$EP\",\"serve_plain\":true}" > "$A/edge.json"
-MOAT_TEST_NATPMP=127.0.0.1:$NP STATE_DIRECTORY="$DIR/state" "$AGENT" run --dir "$A" >"$DIR/agent.log" 2>&1 & AGENT_PID=$!
+DOUVE_TEST_NATPMP=127.0.0.1:$NP STATE_DIRECTORY="$DIR/state" "$AGENT" run --dir "$A" >"$DIR/agent.log" 2>&1 & AGENT_PID=$!
 for _ in $(seq 50); do grep -q "Hub 접속 완료" "$DIR/agent.log" && break; sleep 0.1; done
 
 out=$(post /api/nodes/edge '{"id":1,"edge":true}')
 case "$out" in *'"ok"'*) ok "입구(edge) 지정" ;; *) bad "edge 지정 ($out)";; esac
-out=$(post /api/services/create "{\"name\":\"app\",\"host\":\"app.localhost\",\"node_id\":1,\"upstream\":\"127.0.0.1:$UP\",\"auth\":\"moat\",\"public_paths\":[\"/hook/\"]}")
+out=$(post /api/services/create "{\"name\":\"app\",\"host\":\"app.localhost\",\"node_id\":1,\"upstream\":\"127.0.0.1:$UP\",\"auth\":\"douve\",\"public_paths\":[\"/hook/\"]}")
 case "$out" in *'"ok"'*) ok "보호 서비스 등록" ;; *) bad "서비스 등록 ($out)";; esac
 out=$(post /api/services/create "{\"name\":\"open\",\"host\":\"open.localhost\",\"node_id\":1,\"upstream\":\"127.0.0.1:$UP\",\"auth\":\"public\"}")
 case "$out" in *'"ok"'*) ok "공개 서비스 등록" ;; *) bad "공개 등록 ($out)";; esac
@@ -97,8 +97,8 @@ for _ in $(seq 50); do r=$(edge app.localhost /x); [ "${r%% *}" != 000 ] && brea
 r=$(edge app.localhost "/page?a=1&b=2")
 case "$r" in "302 $BASE/login?rd=http%3A%2F%2Fapp.localhost%2Fpage%3Fa%3D1%26b%3D2") ok "로그인 없으면 Hub 로그인으로 (rd 전체 보존)" ;; *) bad "리다이렉트 ($r)";; esac
 r=$(edge app.localhost /page "$SESSION; theme=dark")
-[ "${r%% *}" = 200 ] && [ "$(jget user)" = test@example.com ] && ok "로그인 세션 통과 + X-Moat-User" || bad "세션 통과 ($r $(cat "$DIR/body"))"
-c=$(jget cookie); case "$c" in *moat_session*) bad "업스트림에 세션 쿠키 노출 ($c)" ;; *theme=dark*) ok "업스트림에 세션 쿠키 미전달, 다른 쿠키 유지" ;; *) bad "쿠키 ($c)";; esac
+[ "${r%% *}" = 200 ] && [ "$(jget user)" = test@example.com ] && ok "로그인 세션 통과 + X-Douve-User" || bad "세션 통과 ($r $(cat "$DIR/body"))"
+c=$(jget cookie); case "$c" in *douve_session*) bad "업스트림에 세션 쿠키 노출 ($c)" ;; *theme=dark*) ok "업스트림에 세션 쿠키 미전달, 다른 쿠키 유지" ;; *) bad "쿠키 ($c)";; esac
 [ "$(jget host)" = "app.localhost" ] && ok "Host 유지" || bad "Host ($(jget host))"
 r=$(edge app.localhost /hook/abc)
 [ "${r%% *}" = 200 ] && ok "예외 경로는 로그인 없이" || bad "예외 경로 ($r)"
@@ -112,7 +112,7 @@ r=$(edge nope.localhost /)
 [ "${r%% *}" = 404 ] && ok "등록 안 된 도메인 404" || bad "미등록 ($r)"
 
 # 경로 접두사(같은 도메인에 두 번째 서비스) + 리다이렉트
-out=$(post /api/services/create "{\"name\":\"app-api\",\"host\":\"app.localhost\",\"path_prefix\":\"/v1/\",\"strip_prefix\":true,\"node_id\":1,\"upstream\":\"127.0.0.1:$UP\",\"auth\":\"moat\"}")
+out=$(post /api/services/create "{\"name\":\"app-api\",\"host\":\"app.localhost\",\"path_prefix\":\"/v1/\",\"strip_prefix\":true,\"node_id\":1,\"upstream\":\"127.0.0.1:$UP\",\"auth\":\"douve\"}")
 case "$out" in *'"ok"'*) ok "같은 도메인에 경로 접두사 서비스 추가" ;; *) bad "경로 서비스 ($out)";; esac
 out=$(post /api/services/create '{"name":"go","host":"go.localhost","kind":"redirect","redirect_to":"https://example.com/"}')
 case "$out" in *'"ok"'*) ok "리다이렉트 서비스 추가" ;; *) bad "리다이렉트 ($out)";; esac
@@ -152,19 +152,19 @@ for _ in $(seq 30); do r=$(edge app.localhost /page); [ "${r%% *}" = 200 ] && br
 out=$(post /api/services/delete '{"id":1}')
 for _ in $(seq 30); do r=$(edge app.localhost /page); [ "${r%% *}" = 404 ] && break; sleep 0.1; done
 [ "${r%% *}" = 404 ] && ok "서비스 삭제 즉시 반영" || bad "삭제 ($out / $r)"
-post /api/services/create "{\"name\":\"app\",\"host\":\"app.localhost\",\"node_id\":1,\"upstream\":\"127.0.0.1:$UP\",\"auth\":\"moat\"}" >/dev/null
+post /api/services/create "{\"name\":\"app\",\"host\":\"app.localhost\",\"node_id\":1,\"upstream\":\"127.0.0.1:$UP\",\"auth\":\"douve\"}" >/dev/null
 for _ in $(seq 30); do r=$(edge app.localhost /page); [ "${r%% *}" = 302 ] && break; sleep 0.1; done
 
-# 노드에서 바로 공개 (moat-agent expose) — 업스트림은 127.0.0.1에만 열려 있지만 이 노드가 입구라 허용
+# 노드에서 바로 공개 (douve-agent expose) — 업스트림은 127.0.0.1에만 열려 있지만 이 노드가 입구라 허용
 X="env STATE_DIRECTORY=$DIR/state $AGENT"
 out=$($X expose $UP --name exp --public 2>&1)
-case "$out" in *"공개됨: https://exp.localhost"*) ok "moat-agent expose → 공개 URL" ;; *) bad "expose ($out)";; esac
+case "$out" in *"공개됨: https://exp.localhost"*) ok "douve-agent expose → 공개 URL" ;; *) bad "expose ($out)";; esac
 for _ in $(seq 30); do r=$(edge exp.localhost /hello); [ "${r%% *}" = 200 ] && break; sleep 0.1; done
 [ "${r%% *}" = 200 ] && ok "노드에서 공개한 서비스 접속" || bad "expose 접속 ($r)"
-$X exposed 2>&1 | grep -q "exp " && ok "moat-agent exposed 목록" || bad "exposed 목록"
+$X exposed 2>&1 | grep -q "exp " && ok "douve-agent exposed 목록" || bad "exposed 목록"
 out=$($X expose $UP --name evil --host evil.example.com 2>&1)
 case "$out" in *"아래 도메인만"*) ok "기본 도메인 밖 공개 거부" ;; *) bad "도메인 제한 ($out)";; esac
-out=$(MOAT_LANG=en $X expose $UP --name evil --host evil.example.com 2>&1)
+out=$(DOUVE_LANG=en $X expose $UP --name evil --host evil.example.com 2>&1)
 case "$out" in *"Servers can only publish domains under"*) ok "CLI 영어 (Hub 오류도 영어)" ;; *) bad "CLI 영어 ($out)";; esac
 curl -s -H "Host: nowhere.localhost" -H "Accept-Language: en-US" "http://127.0.0.1:$EP/" | grep -q "Unknown address" && ok "입구 오류 화면 영어 (Accept-Language)" || bad "입구 오류 영어"
 curl -s -H "Host: nowhere.localhost" -H "Accept-Language: ko-KR" "http://127.0.0.1:$EP/" | grep -q "알 수 없는 주소" && ok "입구 오류 화면 한국어" || bad "입구 오류 한국어"
@@ -172,7 +172,7 @@ out=$($X expose $UP --name app 2>&1)
 case "$out" in *"이미 있습니다"*) ok "웹에서 만든 서비스는 노드가 덮어쓸 수 없음" ;; *) bad "덮어쓰기 ($out)";; esac
 $X unexpose exp >/dev/null 2>&1
 for _ in $(seq 30); do r=$(edge exp.localhost /hello); [ "${r%% *}" = 404 ] && break; sleep 0.1; done
-[ "${r%% *}" = 404 ] && ok "moat-agent unexpose" || bad "unexpose ($r)"
+[ "${r%% *}" = 404 ] && ok "douve-agent unexpose" || bad "unexpose ($r)"
 post /api/settings/save '{"agent_expose":false}' >/dev/null
 out=$($X expose $UP --name exp2 2>&1)
 case "$out" in *"꺼져 있습니다"*) ok "설정에서 끄면 노드 공개 거부" ;; *) bad "설정 끄기 ($out)";; esac
@@ -217,7 +217,7 @@ kill %?"agent2" 2>/dev/null; pkill -f "run --dir $DIR/agent2" 2>/dev/null
 
 # Hub 장애: 보호 서비스는 막히고(fail-closed) 공개 서비스는 계속
 kill $HUB_PID; wait $HUB_PID 2>/dev/null
-r=$(edge app.localhost /page "moat_session=another-token-0123456789abcdefghij")
+r=$(edge app.localhost /page "douve_session=another-token-0123456789abcdefghij")
 [ "${r%% *}" = 502 ] && ok "Hub 장애 시 보호 서비스 차단(fail-closed)" || bad "Hub 장애 보호 ($r)"
 r=$(edge open.localhost /)
 [ "${r%% *}" = 200 ] && ok "Hub 장애 중에도 공개 서비스 유지" || bad "Hub 장애 공개 ($r)"

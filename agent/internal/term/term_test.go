@@ -67,10 +67,10 @@ func TestShellRoundTripAsSelf(t *testing.T) {
 	me, _ := user.Current()
 	m.Open("sess-0001", me.Username, 100, 30)
 	r.wait(t, func(ms []map[string]any) bool { return len(ms) > 0 && ms[0]["type"] == "term_opened" })
-	m.Input("sess-0001", base64.StdEncoding.EncodeToString([]byte("echo moat-$((40+2)); stty size\n")))
+	m.Input("sess-0001", base64.StdEncoding.EncodeToString([]byte("echo douve-$((40+2)); stty size\n")))
 	r.wait(t, func(ms []map[string]any) bool {
 		o := output(ms)
-		return strings.Contains(o, "moat-42") && strings.Contains(o, "30 100")
+		return strings.Contains(o, "douve-42") && strings.Contains(o, "30 100")
 	})
 	m.Resize("sess-0001", 120, 40)
 	m.Input("sess-0001", base64.StdEncoding.EncodeToString([]byte("stty size; exit 3\n")))
@@ -179,11 +179,11 @@ ops:x:1002:1002::/home/ops:/bin/bash
 	}
 }
 
-// root 경로(systemd-run) 시험. 운영 노드에서 직접: sudo MOAT_ROOT_TEST_USER=<계정> ./term.test -test.run Root
+// root 경로(systemd-run) 시험. 운영 노드에서 직접: sudo DOUVE_ROOT_TEST_USER=<계정> ./term.test -test.run Root
 func TestRootSystemdRun(t *testing.T) {
-	name := os.Getenv("MOAT_ROOT_TEST_USER")
+	name := os.Getenv("DOUVE_ROOT_TEST_USER")
 	if os.Geteuid() != 0 || name == "" {
-		t.Skip("root + MOAT_ROOT_TEST_USER 필요")
+		t.Skip("root + DOUVE_ROOT_TEST_USER 필요")
 	}
 	m, r := newMgr()
 	m.Open("root-test-01", name, 90, 33)

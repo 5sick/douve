@@ -8,7 +8,7 @@
 #include <optional>
 #include <string>
 
-namespace moat {
+namespace douve {
 
 // outPath가 이미 있으면 실패. 성공하면 빈 문자열, 아니면 이유.
 std::string writeBackup(Database& db, const std::string& configPath, const std::string& outPath,
@@ -20,7 +20,7 @@ struct BackupInfo {
     std::int64_t createdAt = 0;
     int schema = 0;
 };
-// 백업 파일을 읽는다 (Moat 백업이 아니면 nullopt + error)
+// 백업 파일을 읽는다 (Douve 백업이 아니면 nullopt + error)
 std::optional<BackupInfo> readBackupInfo(const std::string& path, std::string& error);
 
 // 백업을 DB 경로에 복원한다: 기존 DB·WAL을 <db>.before-restore-<시각>으로 옮기고 백업을 복사(백업
@@ -33,4 +33,4 @@ std::optional<std::string> dailyBackup(Database& db, const std::string& configPa
                                        const std::string& dir, const std::string& version,
                                        std::int64_t now, int keep, std::string& error);
 
-} // namespace moat
+} // namespace douve

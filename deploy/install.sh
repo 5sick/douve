@@ -1,13 +1,13 @@
 #!/bin/sh
-# Moat 설치: 빈 서버에서
-#   curl -fsSL https://github.com/5sick/moat/releases/latest/download/install.sh | sudo sh
+# Douve 설치: 빈 서버에서
+#   curl -fsSL https://github.com/5sick/douve/releases/latest/download/install.sh | sudo sh
 # 옵션은 그대로 넘어간다 (sh -s -- --mode tailscale --yes 등). 질문은 터미널(/dev/tty)에서 받는다.
 set -eu
 
 # 메시지 언어: LANG 등이 ko로 시작하면 한국어
-t() { case "${MOAT_LANG:-${LC_ALL:-${LANG:-}}}" in ko*) printf '%s' "$1" ;; *) printf '%s' "$2" ;; esac; }
+t() { case "${DOUVE_LANG:-${LC_ALL:-${LANG:-}}}" in ko*) printf '%s' "$1" ;; *) printf '%s' "$2" ;; esac; }
 
-RELEASE="${MOAT_RELEASE:-https://github.com/5sick/moat/releases/latest/download}"
+RELEASE="${DOUVE_RELEASE:-https://github.com/5sick/douve/releases/latest/download}"
 
 if [ "$(id -u)" -ne 0 ]; then
 	echo "$(t "root 권한이 필요합니다" "Root privileges are required"): curl -fsSL .../install.sh | sudo sh" >&2
@@ -28,7 +28,7 @@ command -v curl >/dev/null 2>&1 || {
 
 tmp=$(mktemp -d)
 trap 'rm -rf "$tmp"' EXIT
-name="moat-agent-linux-$arch"
+name="douve-agent-linux-$arch"
 curl -fsSL -o "$tmp/$name" "$RELEASE/$name"
 curl -fsSL -o "$tmp/SHA256SUMS" "$RELEASE/SHA256SUMS"
 want=$(awk -v n="$name" '$2 == n || $2 == "*" n { print $1 }' "$tmp/SHA256SUMS")
@@ -38,4 +38,4 @@ if [ -z "$want" ] || [ "$want" != "$got" ]; then
 	exit 1
 fi
 chmod 755 "$tmp/$name"
-MOAT_LANG="${MOAT_LANG:-${LC_ALL:-${LANG:-}}}" "$tmp/$name" install --release "$RELEASE" "$@"
+DOUVE_LANG="${DOUVE_LANG:-${LC_ALL:-${LANG:-}}}" "$tmp/$name" install --release "$RELEASE" "$@"

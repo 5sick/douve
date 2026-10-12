@@ -2,7 +2,7 @@
 
 #include "util/crypto.h"
 
-namespace moat {
+namespace douve {
 
 User findOrCreateUser(Database& db, const std::string& email, std::int64_t now) {
     auto guard = db.lock();
@@ -94,4 +94,4 @@ void audit(Database& db, std::optional<std::int64_t> userId, const std::string& 
         .run();
 }
 
-} // namespace moat
+} // namespace douve

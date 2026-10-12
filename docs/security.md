@@ -17,8 +17,8 @@
 4. **fail-closed** — Hub에 닿지 않으면 로그인이 필요한 앱은 막고, 공개 앱만 저장된 표로 계속.
 5. **감사** — 로그인, 재인증, 설정 변경, 터미널(화면 녹화), 노드에서의 공개를 기록.
 6. **세션** — 서버에 저장, DB에는 토큰의 SHA-256만. `HttpOnly; Secure; SameSite=Lax`, 같은 기기 재로그인 시 교체.
-7. **입구** — 보호 앱으로 넘기기 전에 `moat_session` 쿠키와 클라이언트가 보낸 `X-Moat-User`·`Tailscale-*`
-   헤더를 지우고 `X-Moat-User`를 직접 붙인다. HSTS.
+7. **입구** — 보호 앱으로 넘기기 전에 `douve_session` 쿠키와 클라이언트가 보낸 `X-Douve-User`·`Tailscale-*`
+   헤더를 지우고 `X-Douve-User`를 직접 붙인다. HSTS.
 
 ## 구현 시 주의 (C++)
 - WebAuthn 서버 검증은 직접 구현 → 시험 필수 (CBOR, COSE 키, 서명, rpIdHash, origin, signCount, UV).

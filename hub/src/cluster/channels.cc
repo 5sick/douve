@@ -6,7 +6,7 @@
 #include <algorithm>
 #include <regex>
 
-namespace moat {
+namespace douve {
 
 namespace {
 
@@ -197,13 +197,13 @@ HttpPost channelRequest(const Channel& c, const std::string& text, std::int64_t 
             cfg.get("server", "https://ntfy.sh").asString() + "/" + cfg.get("topic", "").asString();
         r.body = text;
         r.contentType = "text/plain; charset=utf-8";
-        r.headers.emplace_back("Title", "Moat");
+        r.headers.emplace_back("Title", "Douve");
         r.headers.emplace_back("Priority", urgent(text) ? "high" : "default");
         if (cfg.isMember("token"))
             r.headers.emplace_back("Authorization", "Bearer " + cfg["token"].asString());
     } else if (c.kind == "discord") {
         Json::Value b;
-        b["username"] = "Moat";
+        b["username"] = "Douve";
         // Discord 메시지는 2000자까지. 서버 이름 등에 든 @everyone 같은 멘션이 울리지 않게 막는다.
         b["content"] = text.size() > 1900 ? text.substr(0, 1900) + "…" : text;
         b["allowed_mentions"]["parse"] = Json::Value(Json::arrayValue);
@@ -228,7 +228,7 @@ HttpPost channelRequest(const Channel& c, const std::string& text, std::int64_t 
         r.body = compact(b);
     } else { // webhook
         Json::Value b;
-        b["source"] = "moat";
+        b["source"] = "douve";
         b["text"] = text;
         b["time"] = Json::Int64(now);
         r.url = cfg.get("url", "").asString();
@@ -236,13 +236,13 @@ HttpPost channelRequest(const Channel& c, const std::string& text, std::int64_t 
         if (cfg.isMember("secret")) {
             // 받는 쪽 검증: HMAC-SHA256(secret, "<timestamp>.<body>")
             const std::string ts = std::to_string(now);
-            r.headers.emplace_back("X-Moat-Timestamp", ts);
+            r.headers.emplace_back("X-Douve-Timestamp", ts);
             r.headers.emplace_back(
-                "X-Moat-Signature",
+                "X-Douve-Signature",
                 "sha256=" + toHex(hmacSha256(cfg["secret"].asString(), ts + "." + r.body)));
         }
     }
     return r;
 }
 
-} // namespace moat
+} // namespace douve

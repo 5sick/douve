@@ -11,7 +11,7 @@
 #include <cstdlib>
 #include <string>
 
-namespace moat::testing {
+namespace douve::testing {
 
 inline cbor_item_t* cborInt(std::int64_t v) {
     if (v >= 0)
@@ -147,4 +147,4 @@ struct SoftAuthenticator {
     }
 };
 
-} // namespace moat::testing
+} // namespace douve::testing

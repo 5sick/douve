@@ -8,7 +8,7 @@
 #include <string>
 #include <vector>
 
-namespace moat {
+namespace douve {
 
 struct Service {
     std::int64_t id = 0;
@@ -16,7 +16,7 @@ struct Service {
     std::string host;
     std::optional<std::int64_t> nodeId;
     std::string upstream;
-    std::string auth = "moat"; // moat | public
+    std::string auth = "douve"; // douve | public
     // 라우팅
     std::string pathPrefix = "/"; // 이 경로 아래만 (도메인 하나에 여러 서비스)
     bool stripPrefix = false;     // 업스트림에 넘길 때 접두사 제거
@@ -25,7 +25,7 @@ struct Service {
     int upstreamTls = 0;          // 0 http, 1 https, 2 https(인증서 검증 안 함: 자체 서명 장비)
     std::string hostHeader;       // 비우면 원래 도메인 유지
     int timeout = 0;              // 첫 응답까지 초 (0 = 제한 없음)
-    std::string origin = "web";   // 만든 곳: web | node (moat-agent expose)
+    std::string origin = "web";   // 만든 곳: web | node (douve-agent expose)
     std::vector<std::string> publicPaths;
     std::int64_t createdAt = 0, updatedAt = 0;
     // 홈 화면
@@ -66,4 +66,4 @@ std::optional<Service> createService(Database& db, Service s, std::int64_t now, 
 bool updateService(Database& db, const Service& s, std::int64_t now, std::string& error);
 bool deleteService(Database& db, std::int64_t id);
 
-} // namespace moat
+} // namespace douve

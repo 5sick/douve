@@ -13,7 +13,7 @@
 
 #include <drogon/drogon.h>
 
-namespace moat {
+namespace douve {
 
 using drogon::HttpRequestPtr;
 using drogon::HttpResponse;
@@ -29,7 +29,7 @@ constexpr int kTimeoutMs = 120000;
 
 // 사용자 핸들: 개인정보가 없는 고정 값 (userId에서 유도)
 Bytes userHandle(std::int64_t userId) {
-    auto h = sha256("moat-user:" + std::to_string(userId));
+    auto h = sha256("douve-user:" + std::to_string(userId));
     return Bytes(h.begin(), h.begin() + 16);
 }
 
@@ -462,4 +462,4 @@ void HubApp::registerPasskeyRoutes() {
         {drogon::Post});
 }
 
-} // namespace moat
+} // namespace douve

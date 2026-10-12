@@ -18,7 +18,7 @@ jobs:
       - run: make agent
       - uses: actions/upload-artifact@v4
         with:
-          name: moat-agent
+          name: douve-agent
           path: dist/
 
   hub:
@@ -38,20 +38,20 @@ jobs:
       - uses: actions/checkout@v4
       - run: make test-hub
       - name: Google 로그인 E2E (가짜 Google 서버)
-        run: tests/e2e/google_flow.sh build/hub/moat-hub
+        run: tests/e2e/google_flow.sh build/hub/douve-hub
       - uses: actions/download-artifact@v4
         with:
-          name: moat-agent
+          name: douve-agent
           path: dist/
       - name: Agent E2E (join → 서명 인증 → 메트릭 → 삭제)
-        run: chmod +x dist/moat-agent-* && tests/e2e/agent_flow.sh build/hub/moat-hub dist
+        run: chmod +x dist/douve-agent-* && tests/e2e/agent_flow.sh build/hub/douve-hub dist
       - name: 입구(edge) E2E (서비스 등록 → 로그인 보호 → Hub 장애)
-        run: tests/e2e/edge_flow.sh build/hub/moat-hub dist
+        run: tests/e2e/edge_flow.sh build/hub/douve-hub dist
       - name: 웹 설정 E2E (텔레그램·초대)
-        run: tests/e2e/settings_flow.sh build/hub/moat-hub
+        run: tests/e2e/settings_flow.sh build/hub/douve-hub
       - name: Tailscale 신원 로그인 E2E
-        run: tests/e2e/tailscale_flow.sh build/hub/moat-hub
+        run: tests/e2e/tailscale_flow.sh build/hub/douve-hub
       - name: 보안 감시 E2E
-        run: tests/e2e/security_flow.sh build/hub/moat-hub dist
+        run: tests/e2e/security_flow.sh build/hub/douve-hub dist
       - name: 비상 출입구 E2E (복구 코드·백업·복원)
-        run: tests/e2e/recovery_flow.sh build/hub/moat-hub
+        run: tests/e2e/recovery_flow.sh build/hub/douve-hub

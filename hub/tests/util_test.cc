@@ -2,7 +2,7 @@
 #include "util/crypto.h"
 #include "util/encoding.h"
 
-using namespace moat;
+using namespace douve;
 
 TEST(base64url_rfc4648_vectors) {
     // RFC 4648 §10 테스트 벡터 (패딩 제거, url-safe)

@@ -1,4 +1,4 @@
-// 노드에서 바로 공개: `moat-agent expose <포트>` (tailscale serve와 비슷).
+// 노드에서 바로 공개: `douve-agent expose <포트>` (tailscale serve와 비슷).
 // 자기 노드의 포트만, 기본 도메인 아래 주소만, 다른 노드가 만든 서비스는 건드릴 수 없다. 감사
 // 로그·알림.
 
@@ -11,7 +11,7 @@
 
 #include <drogon/drogon.h>
 
-namespace moat {
+namespace douve {
 
 namespace {
 
@@ -34,7 +34,7 @@ Json::Value HubApp::handleExpose(std::int64_t nodeId, const Json::Value& req) {
     if (!node)
         return fail("노드를 찾을 수 없습니다");
     if (getSetting(*db_, "agent.expose").value_or("on") == "off")
-        return fail("Moat 설정에서 '노드에서 서비스 공개'가 꺼져 있습니다");
+        return fail("Douve 설정에서 '노드에서 서비스 공개'가 꺼져 있습니다");
     const std::string op = req.get("op", "").asString();
 
     if (op == "list") {
@@ -125,7 +125,7 @@ Json::Value HubApp::handleExpose(std::int64_t nodeId, const Json::Value& req) {
     if (s.host.empty())
         s.host = s.name + "." + cfg_.cookieDomain;
     s.pathPrefix = req.get("path", "").asString();
-    s.auth = req.get("auth", "moat").asString() == "public" ? "public" : "moat";
+    s.auth = req.get("auth", "douve").asString() == "public" ? "public" : "douve";
     s.nodeId = nodeId;
     s.upstream = upstreamHost + ":" + std::to_string(port);
     s.group = "노드에서 공개";
@@ -135,7 +135,7 @@ Json::Value HubApp::handleExpose(std::int64_t nodeId, const Json::Value& req) {
     std::transform(hostLower.begin(), hostLower.end(), hostLower.begin(), ::tolower);
     if (hostLower != cfg_.cookieDomain && !endsWith(hostLower, "." + cfg_.cookieDomain))
         return fail("노드에서는 " + cfg_.cookieDomain +
-                    " 아래 도메인만 공개할 수 있습니다 (다른 도메인은 Moat 웹에서)");
+                    " 아래 도메인만 공개할 수 있습니다 (다른 도메인은 Douve 웹에서)");
 
     // 같은 이름이 있으면: 이 노드가 만든 것이면 갱신, 아니면 거부
     std::optional<Service> existing;
@@ -164,7 +164,7 @@ Json::Value HubApp::handleExpose(std::int64_t nodeId, const Json::Value& req) {
     audit(*db_, std::nullopt, "service_exposed", node->name,
           s.name + " " + url + " → " + s.upstream + " (" + s.auth + ")", t);
     notify("🔗 [" + node->name + "] 서비스 공개: " + s.name + " → " + url +
-           (s.auth == "public" ? " (누구나)" : " (Moat 로그인)"));
+           (s.auth == "public" ? " (누구나)" : " (Douve 로그인)"));
     pushRoutes();
     Json::Value v;
     v["ok"] = true;
@@ -174,4 +174,4 @@ Json::Value HubApp::handleExpose(std::int64_t nodeId, const Json::Value& req) {
     return v;
 }
 
-} // namespace moat
+} // namespace douve

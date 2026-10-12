@@ -75,7 +75,7 @@ func TestNATPMP(t *testing.T) {
 	if err != nil || ip.String() != "203.0.113.9" {
 		t.Fatalf("%v %v", ip, err)
 	}
-	if err := gw.Add(ctx, Mapping{"tcp", 443}, nil, time.Hour, "Moat"); err != nil {
+	if err := gw.Add(ctx, Mapping{"tcp", 443}, nil, time.Hour, "Douve"); err != nil {
 		t.Fatal(err)
 	}
 	if v, ok := maps.Load("2/443"); !ok || v.(uint32) != 3600 {
@@ -94,7 +94,7 @@ func TestNATPMPPortTaken(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
 	gw := &natPMP{addr: addr}
-	err := gw.Add(ctx, Mapping{"tcp", 80}, nil, time.Hour, "Moat")
+	err := gw.Add(ctx, Mapping{"tcp", 80}, nil, time.Hour, "Douve")
 	if err == nil || !strings.Contains(err.Error(), "다른 기기") {
 		t.Fatalf("외부 포트가 다르면 실패해야 함: %v", err)
 	}
@@ -182,10 +182,10 @@ func TestUPnP(t *testing.T) {
 		if err != nil || ip.String() != "100.70.1.2" || !IsCGNAT(ip) {
 			t.Fatalf("외부 주소 %v %v (100.64/10은 CGNAT)", ip, err)
 		}
-		if err := gw.Add(ctx, Mapping{"tcp", 80}, net.ParseIP("192.168.0.10"), time.Hour, "Moat"); err != nil {
+		if err := gw.Add(ctx, Mapping{"tcp", 80}, net.ParseIP("192.168.0.10"), time.Hour, "Douve"); err != nil {
 			t.Fatalf("perm=%v: %v", perm, err)
 		}
-		if v, ok := maps.Load("TCP/80"); !ok || v.(string) != "192.168.0.10 Moat" {
+		if v, ok := maps.Load("TCP/80"); !ok || v.(string) != "192.168.0.10 Douve" {
 			t.Fatalf("매핑 %v", v)
 		}
 		if err := gw.Delete(ctx, Mapping{"tcp", 80}); err != nil {

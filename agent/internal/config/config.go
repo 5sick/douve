@@ -1,7 +1,7 @@
 // Package config는 Agent 설정 파일과 신원 키를 다룬다.
 //
-//	/etc/moat-agent/agent.json  Hub 주소, 노드 ID, 이름
-//	/etc/moat-agent/key         Ed25519 개인키 시드 (32바이트, 권한 600)
+//	/etc/douve-agent/agent.json  Hub 주소, 노드 ID, 이름
+//	/etc/douve-agent/key         Ed25519 개인키 시드 (32바이트, 권한 600)
 package config
 
 import (
@@ -10,7 +10,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/5sick/moat/agent/internal/i18n"
+	"github.com/5sick/douve/agent/internal/i18n"
 	"net"
 	"net/url"
 	"os"
@@ -19,7 +19,7 @@ import (
 )
 
 // DefaultDir는 설정 디렉터리 기본값이다.
-const DefaultDir = "/etc/moat-agent"
+const DefaultDir = "/etc/douve-agent"
 
 // Config는 agent.json 내용이다.
 type Config struct {
@@ -45,7 +45,7 @@ func (p Paths) Load() (*Config, error) {
 		return nil, fmt.Errorf("%s: %w", p.ConfigFile(), err)
 	}
 	if c.HubURL == "" || c.NodeID <= 0 {
-		return nil, fmt.Errorf(i18n.T("%s: hub_url·node_id가 없습니다 (moat-agent join 먼저 실행)"), p.ConfigFile())
+		return nil, fmt.Errorf(i18n.T("%s: hub_url·node_id가 없습니다 (douve-agent join 먼저 실행)"), p.ConfigFile())
 	}
 	return &c, nil
 }

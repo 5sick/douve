@@ -12,7 +12,7 @@
 #include <filesystem>
 #include <sstream>
 
-namespace moat {
+namespace douve {
 
 using drogon::HttpRequestPtr;
 using drogon::HttpResponse;
@@ -219,7 +219,7 @@ void HubApp::registerNodeRoutes() {
         },
         {drogon::Post});
 
-    // Agent 등록 (join.sh → moat-agent join). 세션 대신 일회용 토큰으로 인증.
+    // Agent 등록 (join.sh → douve-agent join). 세션 대신 일회용 토큰으로 인증.
     app.registerHandler(
         "/api/agent/enroll",
         [this](const HttpRequestPtr& req, Callback&& cb) {
@@ -260,7 +260,7 @@ void HubApp::registerNodeRoutes() {
                         [this](const HttpRequestPtr&, Callback&& cb) {
                             const auto* a = assets::find("join.sh");
                             std::string body(reinterpret_cast<const char*>(a->data), a->size);
-                            const std::string key = "__MOAT_HUB__";
+                            const std::string key = "__DOUVE_HUB__";
                             for (auto p = body.find(key); p != std::string::npos;
                                  p = body.find(key, p))
                                 body.replace(p, key.size(), cfg_.publicUrl);
@@ -275,7 +275,7 @@ void HubApp::registerNodeRoutes() {
     app.registerHandler("/dl/{file}",
                         [this](const HttpRequestPtr&, Callback&& cb, const std::string& file) {
                             static const std::set<std::string> allowed = {
-                                "moat-agent-linux-amd64", "moat-agent-linux-arm64", "SHA256SUMS"};
+                                "douve-agent-linux-amd64", "douve-agent-linux-arm64", "SHA256SUMS"};
                             if (!allowed.count(file))
                                 return cb(HttpResponse::newNotFoundResponse());
                             const auto path = std::filesystem::path(cfg_.agentDir) / file;
@@ -291,4 +291,4 @@ void HubApp::registerNodeRoutes() {
                         {drogon::Get});
 }
 
-} // namespace moat
+} // namespace douve

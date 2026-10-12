@@ -6,7 +6,7 @@
 #include <optional>
 #include <string>
 
-namespace moat {
+namespace douve {
 
 struct AgentRelease {
     std::string version;
@@ -15,4 +15,4 @@ struct AgentRelease {
 
 std::optional<AgentRelease> loadAgentRelease(const std::string& dir);
 
-} // namespace moat
+} // namespace douve

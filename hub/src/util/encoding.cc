@@ -3,7 +3,7 @@
 #include <array>
 #include <cctype>
 
-namespace moat {
+namespace douve {
 namespace {
 constexpr char kAlphabet[] = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_";
 
@@ -97,4 +97,4 @@ std::string urlEncode(std::string_view s) {
     return out;
 }
 
-} // namespace moat
+} // namespace douve

@@ -54,7 +54,7 @@ func TestRecommendedAllOn(t *testing.T) {
 }
 
 func TestParentDomain(t *testing.T) {
-	for in, want := range map[string]string{"moat.example.com": "example.com", "example.com": "example.com", "a.b.c.d": "b.c.d"} {
+	for in, want := range map[string]string{"douve.example.com": "example.com", "example.com": "example.com", "a.b.c.d": "b.c.d"} {
 		if got := parentDomain(in); got != want {
 			t.Fatalf("%s → %s", in, got)
 		}
@@ -62,7 +62,7 @@ func TestParentDomain(t *testing.T) {
 }
 
 func TestMessagesFollowLanguage(t *testing.T) {
-	t.Setenv("MOAT_LANG", "en")
+	t.Setenv("DOUVE_LANG", "en")
 	var b strings.Builder
 	s := &Installer{Out: &b}
 	s.step(4, "접속 확인")

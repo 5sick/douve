@@ -12,12 +12,12 @@
 #include <iostream>
 #include <unistd.h>
 
-namespace moat {
+namespace douve {
 namespace {
 
 const char* kUsage =
-    "사용법: moat-hub init --public-url URL --email 이메일 [옵션]\n"
-    "  --public-url URL            Hub 공개 주소 (예: https://moat.example.com)\n"
+    "사용법: douve-hub init --public-url URL --email 이메일 [옵션]\n"
+    "  --public-url URL            Hub 공개 주소 (예: https://douve.example.com)\n"
     "  --email 이메일              로그인 허용 이메일 (여러 번 지정 가능)\n"
     "  --google-client-id ID       Google OAuth 클라이언트 ID\n"
     "  --google-client-secret 값   Google OAuth 클라이언트 보안 비밀\n"
@@ -26,7 +26,7 @@ const char* kUsage =
     "  --trusted-proxy IP          X-Forwarded-For를 신뢰할 프록시 (여러 번 지정 가능)\n"
     "  --tailscale-auth            Tailscale 내부 전용: tailscale serve의 사용자 헤더로 로그인\n"
     "  --language ko|en            알림 언어 (기본: LANG 환경 변수)\n"
-    "  --output 파일               설정 파일 경로 (기본 /etc/moat/hub.json)\n"
+    "  --output 파일               설정 파일 경로 (기본 /etc/douve/hub.json)\n"
     "  --force                     기존 파일 덮어쓰기\n";
 
 } // namespace
@@ -44,7 +44,7 @@ std::string inferCookieDomain(const std::string& publicUrl) {
 
 int runInit(const std::vector<std::string>& args) {
     Json::Value cfg;
-    std::string output = "/etc/moat/hub.json";
+    std::string output = "/etc/douve/hub.json";
     bool force = false;
     Json::Value emails(Json::arrayValue), proxies(Json::arrayValue);
     proxies.append("127.0.0.1");
@@ -112,7 +112,7 @@ int runInit(const std::vector<std::string>& args) {
         cfg["cookie_domain"] = inferCookieDomain(cfg["public_url"].asString());
     cfg["allowed_emails"] = emails;
     cfg["trusted_proxies"] = proxies;
-    cfg["database_path"] = "/var/lib/moat/hub.db";
+    cfg["database_path"] = "/var/lib/douve/hub.db";
 
     Json::StreamWriterBuilder w;
     w["indentation"] = "  ";
@@ -156,4 +156,4 @@ int runInit(const std::vector<std::string>& args) {
     return 0;
 }
 
-} // namespace moat
+} // namespace douve

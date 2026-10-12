@@ -65,7 +65,7 @@ func TestTunnelRoundTripAndAllowList(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	payload := bytes.Repeat([]byte("moat-tunnel "), 100000) // 1.2MB
+	payload := bytes.Repeat([]byte("douve-tunnel "), 100000) // 1.2MB
 	go conn.Write(payload)
 	got := make([]byte, len(payload))
 	if _, err := io.ReadFull(conn, got); err != nil || !bytes.Equal(got, payload) {

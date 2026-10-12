@@ -1,6 +1,6 @@
 #include "auth/ratelimit.h"
 
-namespace moat {
+namespace douve {
 
 bool RateLimiter::allow(const std::string& key, std::int64_t now) {
     std::lock_guard lk(mu_);
@@ -25,4 +25,4 @@ void RateLimiter::cleanup(std::int64_t now) {
     }
 }
 
-} // namespace moat
+} // namespace douve

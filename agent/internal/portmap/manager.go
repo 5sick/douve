@@ -29,7 +29,7 @@ type Status struct {
 const (
 	lease = time.Hour
 	renew = 20 * time.Minute
-	desc  = "Moat"
+	desc  = "Douve"
 )
 
 // Manager는 Hub가 원하는 포트를 공유기에 열어 두고(수명 1시간, 20분마다 갱신) 결과를 보고한다.

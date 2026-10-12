@@ -14,7 +14,7 @@
 #include <string>
 #include <vector>
 
-namespace moat {
+namespace douve {
 
 struct AlertThresholds {
     int offlineSeconds = 120;
@@ -55,4 +55,4 @@ AlertActions reconcile(const std::vector<OpenAlert>& current,
 std::string alertOpenText(const std::string& nodeName, const std::string& message);
 std::string alertResolvedText(const std::string& nodeName, const OpenAlert& a, std::int64_t now);
 
-} // namespace moat
+} // namespace douve

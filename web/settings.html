@@ -5,7 +5,7 @@
 <script src="/static/i18n-en.js"></script>
 <script src="/static/i18n.js"></script>
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Moat 설정</title>
+<title>Douve 설정</title>
 <link rel="icon" href="/favicon.svg" type="image/svg+xml">
 <link rel="icon" href="/favicon.ico" sizes="32x32">
 <link rel="apple-touch-icon" href="/apple-touch-icon.png">
@@ -29,7 +29,7 @@
 
   <h2>사람 초대</h2>
   <form class="card stack" id="invite-form">
-    <p class="meta">초대 링크를 연 사람은 패스키를 만들고 바로 이 Moat에 로그인합니다. 내 새 기기를 추가할 때도 쓸 수 있습니다.
+    <p class="meta">초대 링크를 연 사람은 패스키를 만들고 바로 이 Douve에 로그인합니다. 내 새 기기를 추가할 때도 쓸 수 있습니다.
       링크는 24시간 동안 한 번만 쓸 수 있습니다.</p>
     <label class="field">이메일 (사용자 이름으로 쓰임)
       <input id="invite-email" type="email" required autocomplete="off" placeholder="name@example.com">
@@ -57,7 +57,7 @@
 
   <h2>노드에서 서비스 공개</h2>
   <div class="card stack">
-    <p class="meta">서버에서 <code>sudo moat-agent expose 3000 --name grafana</code> 한 줄로 서비스를 공개합니다 (tailscale serve처럼).
+    <p class="meta">서버에서 <code>sudo douve-agent expose 3000 --name grafana</code> 한 줄로 서비스를 공개합니다 (tailscale serve처럼).
       자기 서버의 포트만, 기본 도메인 아래 주소만 열 수 있고, 공개할 때마다 알림과 감사 로그가 남습니다.</p>
     <label class="check"><input type="checkbox" id="expose-on"> 서버의 root가 직접 서비스를 공개하도록 허용</label>
   </div>
@@ -99,7 +99,7 @@
         </label>
         <label class="field">이름 <input id="ch-name" autocomplete="off" placeholder="예: 내 휴대폰" maxlength="40"></label>
         <div class="stack" id="ch-ntfy-box">
-          <label class="field">서버 <input id="ch-server" autocomplete="off" placeholder="https://ntfy.sh"></label>
+          <label class="field">ntfy 서버 <input id="ch-server" autocomplete="off" placeholder="https://ntfy.sh"></label>
           <label class="field">토픽 <input id="ch-topic" autocomplete="off" maxlength="64"></label>
           <label class="field">접근 토큰 (선택) <input id="ch-token" autocomplete="off" placeholder="tk_…"></label>
         </div>

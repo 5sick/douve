@@ -2,7 +2,7 @@
 
 #include "util/crypto.h"
 
-namespace moat {
+namespace douve {
 namespace {
 constexpr std::int64_t kDay = 24 * 60 * 60;
 constexpr std::int64_t kTouchInterval = 5 * 60;
@@ -172,4 +172,4 @@ std::optional<std::string> cookieValue(const std::string& header, const std::str
     return std::nullopt;
 }
 
-} // namespace moat
+} // namespace douve

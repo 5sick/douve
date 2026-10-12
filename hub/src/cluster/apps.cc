@@ -3,18 +3,18 @@
 #include <map>
 #include <set>
 
-namespace moat {
+namespace douve {
 
 namespace {
 
-// 공개할 대상이 아닌 포트·프로세스 (시스템·Moat 자신)
+// 공개할 대상이 아닌 포트·프로세스 (시스템·Douve 자신)
 const std::set<int> kSkipPorts = {22,   25,   53,   111,   323,   631,  3306,
                                   5355, 5432, 6379, 11211, 27017, 51820};
 const std::set<std::string> kSkipProcesses = {
-    "moat-hub",     "moat-agent", "sshd",     "systemd-resolve", "systemd-resolved",
-    "chronyd",      "rpcbind",    "cupsd",    "master",          "dnsmasq",
-    "postgres",     "mysqld",     "mariadbd", "redis-server",    "tailscaled",
-    "docker-proxy", "containerd", "dockerd",  "rpc.statd"};
+    "douve-hub",    "douve-agent", "sshd",     "systemd-resolve", "systemd-resolved",
+    "chronyd",      "rpcbind",     "cupsd",    "master",          "dnsmasq",
+    "postgres",     "mysqld",      "mariadbd", "redis-server",    "tailscaled",
+    "docker-proxy", "containerd",  "dockerd",  "rpc.statd"};
 
 bool isLoopbackIp(const std::string& ip) {
     return ip.rfind("127.", 0) == 0 || ip == "::1" || ip == "localhost";
@@ -218,4 +218,4 @@ Json::Value discoverApps(const Node& n, const Json::Value& inv,
     return out;
 }
 
-} // namespace moat
+} // namespace douve

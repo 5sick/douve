@@ -33,7 +33,7 @@ foreach(f IN LISTS FILES)
     string(APPEND table "    {\"${f}\", \"${mime}\", d${i}, ${size}},\n")
     math(EXPR i "${i} + 1")
 endforeach()
-file(WRITE "${OUT}.tmp" "// 자동 생성 파일 — 수정하지 말 것 (cmake/embed.cmake)\n#include \"assets.h\"\n\nnamespace moat::assets {\nnamespace {\n${body}\nconst Asset kAssets[] = {\n${table}};\n} // namespace\n\nconst Asset* find(std::string_view name) {\n    for (const auto& a : kAssets)\n        if (name == a.name) return &a;\n    return nullptr;\n}\n\n} // namespace moat::assets\n")
+file(WRITE "${OUT}.tmp" "// 자동 생성 파일 — 수정하지 말 것 (cmake/embed.cmake)\n#include \"assets.h\"\n\nnamespace douve::assets {\nnamespace {\n${body}\nconst Asset kAssets[] = {\n${table}};\n} // namespace\n\nconst Asset* find(std::string_view name) {\n    for (const auto& a : kAssets)\n        if (name == a.name) return &a;\n    return nullptr;\n}\n\n} // namespace douve::assets\n")
 # 내용이 같으면 덮어쓰지 않아 불필요한 재컴파일을 막는다
 file(COPY_FILE "${OUT}.tmp" "${OUT}" ONLY_IF_DIFFERENT)
 file(REMOVE "${OUT}.tmp")

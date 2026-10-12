@@ -14,7 +14,7 @@
 #include <string>
 #include <vector>
 
-namespace moat {
+namespace douve {
 
 struct Disk {
     std::string mount;
@@ -66,4 +66,4 @@ class LiveState {
     std::map<std::int64_t, Entry> nodes_;
 };
 
-} // namespace moat
+} // namespace douve

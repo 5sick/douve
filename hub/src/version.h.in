@@ -1,5 +1,5 @@
 #pragma once
 
-namespace moat {
-inline constexpr const char* kVersion = "@MOAT_VERSION@";
-} // namespace moat
+namespace douve {
+inline constexpr const char* kVersion = "@DOUVE_VERSION@";
+} // namespace douve

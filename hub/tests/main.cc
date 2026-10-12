@@ -2,19 +2,19 @@
 
 #include <cstring>
 
-// 사용: moat_hub_tests [이름 필터]
+// 사용: douve_hub_tests [이름 필터]
 int main(int argc, char** argv) {
     const char* filter = argc > 1 ? argv[1] : nullptr;
     int run = 0;
-    for (auto& c : moat::testing::registry()) {
+    for (auto& c : douve::testing::registry()) {
         if (filter && !std::strstr(c.name, filter))
             continue;
-        int before = moat::testing::failures();
+        int before = douve::testing::failures();
         c.fn();
         ++run;
-        std::cout << (moat::testing::failures() == before ? "  ok   " : "  FAIL ") << c.name
+        std::cout << (douve::testing::failures() == before ? "  ok   " : "  FAIL ") << c.name
                   << "\n";
     }
-    std::cout << run << " tests, " << moat::testing::failures() << " failures\n";
-    return moat::testing::failures() == 0 ? 0 : 1;
+    std::cout << run << " tests, " << douve::testing::failures() << " failures\n";
+    return douve::testing::failures() == 0 ? 0 : 1;
 }

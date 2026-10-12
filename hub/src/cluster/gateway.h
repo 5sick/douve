@@ -12,7 +12,7 @@
 #include <mutex>
 #include <string>
 
-namespace moat {
+namespace douve {
 
 class HubApp;
 
@@ -54,4 +54,4 @@ class AgentGateway : public drogon::WebSocketController<AgentGateway, false> {
     std::map<std::int64_t, drogon::WebSocketConnectionPtr> conns_;
 };
 
-} // namespace moat
+} // namespace douve

@@ -9,7 +9,7 @@
 #include <string>
 #include <vector>
 
-namespace moat {
+namespace douve {
 
 struct IconData {
     std::string contentType;
@@ -38,4 +38,4 @@ std::string dashboardIconUrl(const std::string& name, bool svg);
 // 응답이 아이콘으로 쓸 수 있는 이미지인지 (형식·크기)
 bool acceptableIcon(const std::string& contentType, const std::string& bytes);
 
-} // namespace moat
+} // namespace douve

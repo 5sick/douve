@@ -2,7 +2,7 @@
 # Agent에 들어가는 Go 모듈(표준 라이브러리 포함)의 라이선스 고지를 모은다 → 표준 출력
 set -eu
 cd "$(dirname "$0")/../agent"
-echo "Third-party software compiled into moat-agent"
+echo "Third-party software compiled into douve-agent"
 echo
 echo "================================================================"
 echo "Go standard library $(go env GOVERSION) — BSD-3-Clause"
@@ -42,7 +42,7 @@ LICENSE
 fi
 echo
 # 실제로 빌드에 쓰이는 모듈만 (테스트 전용 제외)
-for m in $(go list -deps -f '{{with .Module}}{{if not .Main}}{{.Path}}@{{.Version}}{{end}}{{end}}' ./cmd/moat-agent | sort -u); do
+for m in $(go list -deps -f '{{with .Module}}{{if not .Main}}{{.Path}}@{{.Version}}{{end}}{{end}}' ./cmd/douve-agent | sort -u); do
     dir=$(go mod download -json "$m" | sed -n 's/.*"Dir": "\(.*\)".*/\1/p')
     lic=$(ls "$dir" | grep -iE '^(LICENSE|LICENCE|COPYING)' | head -1)
     echo "================================================================"

@@ -20,7 +20,7 @@ func TestApplyVerifiesAndReplaces(t *testing.T) {
 	defer srv.Close()
 
 	dir := t.TempDir()
-	exe := filepath.Join(dir, "moat-agent")
+	exe := filepath.Join(dir, "douve-agent")
 	os.WriteFile(exe, []byte("old"), 0o755)
 	state := filepath.Join(dir, "state")
 
@@ -35,7 +35,7 @@ func TestApplyVerifiesAndReplaces(t *testing.T) {
 	if b, _ := os.ReadFile(exe); string(b) != "old" {
 		t.Fatal("불일치인데 교체됨")
 	}
-	if _, err := os.Stat(filepath.Join(dir, ".moat-agent.new")); err == nil {
+	if _, err := os.Stat(filepath.Join(dir, ".douve-agent.new")); err == nil {
 		t.Fatal("임시 파일이 남음")
 	}
 

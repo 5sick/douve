@@ -1,7 +1,7 @@
 // Package i18n은 Agent가 사람에게 보여 주는 문구(설치기·CLI·입구 오류 화면)를 영어로 바꾼다.
 // 원문은 한국어 그대로 두고, en.json에 같은 원문(형식 문자열이면 %s 등 포함)이 있으면 영어를 쓴다.
 //
-//	언어: MOAT_LANG → LC_ALL → LC_MESSAGES → LANG 순으로 보고 ko로 시작하면 한국어, 아니면 영어
+//	언어: DOUVE_LANG → LC_ALL → LC_MESSAGES → LANG 순으로 보고 ko로 시작하면 한국어, 아니면 영어
 //	입구 오류 화면은 브라우저의 Accept-Language를 따른다 (ForRequest).
 package i18n
 
@@ -31,7 +31,7 @@ func load() {
 
 // Lang은 환경 변수로 정한 CLI 언어다 (ko | en).
 func Lang() string {
-	for _, k := range []string{"MOAT_LANG", "LC_ALL", "LC_MESSAGES", "LANG"} {
+	for _, k := range []string{"DOUVE_LANG", "LC_ALL", "LC_MESSAGES", "LANG"} {
 		if v := os.Getenv(k); v != "" && v != "C" && v != "POSIX" {
 			if strings.HasPrefix(strings.ToLower(v), "ko") {
 				return "ko"

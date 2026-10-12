@@ -9,7 +9,7 @@
 
 #include <drogon/drogon.h>
 
-namespace moat {
+namespace douve {
 
 using drogon::HttpRequestPtr;
 using drogon::HttpResponsePtr;
@@ -107,4 +107,4 @@ void HubApp::registerPortmapRoutes() {
         {drogon::Post});
 }
 
-} // namespace moat
+} // namespace douve

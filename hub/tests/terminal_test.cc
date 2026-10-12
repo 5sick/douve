@@ -6,7 +6,7 @@
 #include <fstream>
 #include <sstream>
 
-using namespace moat;
+using namespace douve;
 
 TEST(utf8_split_carries_partial_sequences) {
     std::string carry;
@@ -23,7 +23,7 @@ TEST(utf8_split_carries_partial_sequences) {
 }
 
 TEST(recorder_writes_asciicast) {
-    auto path = std::filesystem::temp_directory_path() / ("moat-rec-" + randomToken(6) + ".cast");
+    auto path = std::filesystem::temp_directory_path() / ("douve-rec-" + randomToken(6) + ".cast");
     {
         Recorder r(path.string(), 100, 30, 1700000000, "node2 ubuntu");
         CHECK(r.ok());

@@ -9,7 +9,7 @@
 #include <optional>
 #include <string>
 
-namespace moat::webauthn {
+namespace douve::webauthn {
 
 inline constexpr std::uint8_t kFlagUP = 0x01; // 사용자 존재 (터치)
 inline constexpr std::uint8_t kFlagUV = 0x04; // 사용자 검증 (지문·PIN 등)
@@ -33,7 +33,7 @@ std::optional<AuthData> parseAuthData(const Bytes& raw, std::string& error);
 
 struct Expectations {
     Bytes challenge;
-    std::string origin; // 예: https://moat.example.com
+    std::string origin; // 예: https://douve.example.com
     std::string rpId;   // 예: example.com
     bool requireUserVerification = true;
 };
@@ -62,4 +62,4 @@ std::optional<AssertionResult> verifyAssertion(const Bytes& clientDataJson,
                                                std::uint32_t storedSignCount,
                                                const Expectations& exp, std::string& error);
 
-} // namespace moat::webauthn
+} // namespace douve::webauthn

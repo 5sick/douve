@@ -19,7 +19,7 @@
 #include <filesystem>
 #include <thread>
 
-namespace moat {
+namespace douve {
 
 void HubApp::startBackgroundTasks() {
     startedAt_ = now();
@@ -210,7 +210,7 @@ void HubApp::notify(const std::string& text) {
         const std::string url =
             cfg_.telegramApiUrl + "/bot" + creds.telegramBotToken + "/sendMessage";
         const std::string form = "chat_id=" + urlEncode(creds.telegramChatId) +
-                                 "&text=" + urlEncode("[Moat] " + msg) +
+                                 "&text=" + urlEncode("[Douve] " + msg) +
                                  "&disable_web_page_preview=true";
         httpFetchAsync(url, form, [](HttpResult r) {
             if (!r.ok || r.status != 200)
@@ -230,4 +230,4 @@ void HubApp::notify(const std::string& text) {
     }
 }
 
-} // namespace moat
+} // namespace douve

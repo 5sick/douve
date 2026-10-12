@@ -4,7 +4,7 @@
 #include <regex>
 #include <sstream>
 
-namespace moat {
+namespace douve {
 
 std::optional<AgentRelease> loadAgentRelease(const std::string& dir) {
     AgentRelease r;
@@ -16,7 +16,7 @@ std::optional<AgentRelease> loadAgentRelease(const std::string& dir) {
     if (r.version.empty() || r.version.size() > 64)
         return std::nullopt;
     std::ifstream sums(dir + "/SHA256SUMS");
-    static const std::regex line(R"(^([0-9a-f]{64})\s+\*?moat-agent-linux-(amd64|arm64)\s*$)");
+    static const std::regex line(R"(^([0-9a-f]{64})\s+\*?douve-agent-linux-(amd64|arm64)\s*$)");
     std::string s;
     while (std::getline(sums, s)) {
         std::smatch m;
@@ -28,4 +28,4 @@ std::optional<AgentRelease> loadAgentRelease(const std::string& dir) {
     return r;
 }
 
-} // namespace moat
+} // namespace douve

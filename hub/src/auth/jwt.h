@@ -9,7 +9,7 @@
 #include <optional>
 #include <string>
 
-namespace moat {
+namespace douve {
 
 // RS256 공개키 집합 (JWKS). kid → DER 형식이 아니라 (n, e) 원본 바이트로 보관.
 class JwkSet {
@@ -62,4 +62,4 @@ struct IdTokenExpectations {
 std::optional<GoogleIdentity> checkGoogleClaims(const Json::Value& claims,
                                                 const IdTokenExpectations& exp, std::string& error);
 
-} // namespace moat
+} // namespace douve

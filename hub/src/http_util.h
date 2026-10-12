@@ -6,7 +6,7 @@
 
 #include <string>
 
-namespace moat::http {
+namespace douve::http {
 
 inline drogon::HttpResponsePtr json(const Json::Value& v,
                                     drogon::HttpStatusCode code = drogon::k200OK) {
@@ -22,4 +22,4 @@ inline drogon::HttpResponsePtr error(drogon::HttpStatusCode code, const std::str
     return json(v, code);
 }
 
-} // namespace moat::http
+} // namespace douve::http

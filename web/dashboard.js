@@ -384,7 +384,7 @@ function renderReach(n) {
 
 function renderNode(n) {
   state.node = n;
-  document.title = `Moat · ${n.name}`;
+  document.title = `Douve · ${n.name}`;
   $('name').textContent = n.name;
   $('status-dot').className = `dot ${n.connected ? 'on' : 'off'}`;
   $('subtitle').textContent = `${n.hostname} · ${statusText(n, n.now)}`;
@@ -515,7 +515,7 @@ async function initNode() {
     } catch (e) { show(e.message); }
   });
   $('delete').addEventListener('click', async () => {
-    if (!confirm(`'${state.node?.name}' 서버를 Moat에서 삭제할까요?\n수집한 기록도 지워지고, 서버의 Agent는 더 이상 접속할 수 없습니다.`)) return;
+    if (!confirm(`'${state.node?.name}' 서버를 Douve에서 삭제할까요?\n수집한 기록도 지워지고, 서버의 Agent는 더 이상 접속할 수 없습니다.`)) return;
     try {
       await withReauth(() => api('/api/nodes/delete', { id: state.id }));
       location.href = '/dashboard';
@@ -536,7 +536,7 @@ function healthView(h) {
 }
 
 function serviceRow(s) {
-  const auth = s.auth === 'public' ? '공개' : 'Moat 로그인';
+  const auth = s.auth === 'public' ? '공개' : 'Douve 로그인';
   const edit = el('button', { class: 'small', text: '수정' });
   const del = el('button', { class: 'small danger', text: '삭제' });
   edit.addEventListener('click', () => openServiceDialog(s));
@@ -585,7 +585,7 @@ async function loadServices() {
 }
 
 // ---------- 실행 중인 앱 (공개 제안) ----------
-const HIDDEN_APPS_KEY = 'moat.hiddenApps';
+const HIDDEN_APPS_KEY = 'douve.hiddenApps';
 function hiddenApps() {
   try { return new Set(JSON.parse(localStorage.getItem(HIDDEN_APPS_KEY) || '[]')); } catch (_) { return new Set(); }
 }
@@ -619,7 +619,7 @@ function appRow(a, hidden) {
       el('div', { class: 'svc-head' }, [tileIcon(iconItem), el('div', {}, [
         el('strong', { text: a.name }),
         el('div', { class: 'meta' }, [meta.join(' · '),
-          a.loopback ? el('span', { class: 'tag tag-gap', text: '이 서버 안에서만 열림', title: '127.0.0.1에만 열려 있습니다. 다른 서버의 입구에서는 Moat 터널로 연결합니다.' }) : '']),
+          a.loopback ? el('span', { class: 'tag tag-gap', text: '이 서버 안에서만 열림', title: '127.0.0.1에만 열려 있습니다. 다른 서버의 입구에서는 Douve 터널로 연결합니다.' }) : '']),
       ])]),
       el('div', { class: 'row' }, buttons),
     ]),
@@ -698,7 +698,7 @@ async function openServiceDialog(s = null, prefill = null) {
   $('svc-name').value = s?.name ?? '';
   $('svc-host').value = s?.host ?? '';
   $('svc-host').dataset.touched = s ? '1' : '';
-  for (const r of document.querySelectorAll('input[name="svc-auth"]')) r.checked = r.value === (s?.auth ?? 'moat');
+  for (const r of document.querySelectorAll('input[name="svc-auth"]')) r.checked = r.value === (s?.auth ?? 'douve');
   $('svc-paths').value = (s?.public_paths ?? []).join('\n');
   $('svc-group').value = s?.group ?? '';
   $('svc-desc').value = s?.description ?? '';
@@ -824,14 +824,14 @@ const CH_HELP = {
   ntfy: '휴대폰에 ntfy 앱을 설치하고 이 토픽을 구독하세요. 공개 서버(ntfy.sh)에서는 토픽 이름이 곧 비밀번호이니 추측하기 어렵게 두세요.',
   discord: 'Discord 채널 설정 → 연동 → 웹후크 → 새 웹후크 → 웹후크 URL 복사.',
   slack: 'Slack 앱 디렉터리 → Incoming Webhooks → 채널 선택 → Webhook URL 복사.',
-  webhook: 'Moat가 {"source":"moat","text":…,"time":…}를 POST합니다. 서명 비밀값을 넣으면 X-Moat-Signature: sha256=HMAC(비밀값, "시각.본문")와 X-Moat-Timestamp 헤더를 붙입니다.',
+  webhook: 'Douve가 {"source":"douve","text":…,"time":…}를 POST합니다. 서명 비밀값을 넣으면 X-Douve-Signature: sha256=HMAC(비밀값, "시각.본문")와 X-Douve-Timestamp 헤더를 붙입니다.',
 };
 const CH_KIND = { ntfy: 'ntfy', discord: 'Discord', slack: 'Slack', webhook: '웹훅' };
 
 function randomTopic() {
   const a = new Uint8Array(12);
   crypto.getRandomValues(a);
-  return `moat-${[...a].map((x) => 'abcdefghijkmnpqrstuvwxyz23456789'[x % 32]).join('')}`;
+  return `douve-${[...a].map((x) => 'abcdefghijkmnpqrstuvwxyz23456789'[x % 32]).join('')}`;
 }
 
 function syncChannelForm() {
@@ -994,7 +994,7 @@ async function loadSecurity() {
       el('span', {}, [el('span', { class: `tag sev-${e.severity}`, text: SEV[e.severity] || e.severity }), el('span', { text: ` ${e.summary}` })]),
       el('span', { class: 'meta', text: `${e.node} · ${fmtTime(e.ts)}` }),
     ]),
-    e.via ? el('div', { class: 'meta', text: `Moat 터미널 — ${e.via} (알리지 않음)` })
+    e.via ? el('div', { class: 'meta', text: `Douve 터미널 — ${e.via} (알리지 않음)` })
       : e.status === 'ignored' ? el('div', { class: 'meta', text: '무시 중인 이슈' }) : '',
   ]), '기록 없음');
 }
@@ -1125,7 +1125,7 @@ async function initHome() {
   const h = new Date().getHours();
   const part = h < 5 ? '늦은 밤이에요' : h < 11 ? '좋은 아침이에요' : h < 14 ? '좋은 점심이에요' : h < 18 ? '좋은 오후예요' : '좋은 저녁이에요';
   $('greet').textContent = part;
-  $('today').textContent = new Date().toLocaleDateString(window.moatLocale, { year: 'numeric', month: 'long', day: 'numeric', weekday: 'long' });
+  $('today').textContent = new Date().toLocaleDateString(window.douveLocale, { year: 'numeric', month: 'long', day: 'numeric', weekday: 'long' });
   $('search-icon').replaceWith(icon('search', 18));
   $('search').addEventListener('submit', (ev) => {
     ev.preventDefault();

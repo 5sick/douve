@@ -1,6 +1,6 @@
-// 초대 E2E: Google 없이(설정 자체가 없음) `moat-hub invite` 링크 → 패스키 등록 → 대시보드 →
+// 초대 E2E: Google 없이(설정 자체가 없음) `douve-hub invite` 링크 → 패스키 등록 → 대시보드 →
 // 로그아웃 → 패스키 로그인. 링크 재사용·만료·위조 거부도 확인한다.
-// 사용: node invite_flow.mjs [moat-hub 경로]
+// 사용: node invite_flow.mjs [douve-hub 경로]
 import { spawn, execFileSync } from 'node:child_process';
 import { mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -9,8 +9,8 @@ import { fileURLToPath } from 'node:url';
 import { chromium } from 'playwright';
 
 const here = dirname(fileURLToPath(import.meta.url));
-const hubBin = resolve(process.argv[2] || join(here, '../../../build/hub/moat-hub'));
-const dir = mkdtempSync(join(tmpdir(), 'moat-invite-'));
+const hubBin = resolve(process.argv[2] || join(here, '../../../build/hub/douve-hub'));
+const dir = mkdtempSync(join(tmpdir(), 'douve-invite-'));
 const db = join(dir, 'hub.db');
 const cfgPath = join(dir, 'hub.json');
 const PORT = 18910;

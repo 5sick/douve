@@ -1,10 +1,10 @@
 #!/bin/bash
 # Tailscale 내부 전용 모드 E2E: tailscale serve가 붙이는 Tailscale-User-Login으로 로그인.
 # 허용된 사용자만, 127.0.0.1에서 온 헤더만, 모드가 꺼져 있으면 무시.
-# 사용: tests/e2e/tailscale_flow.sh [moat-hub 경로]
+# 사용: tests/e2e/tailscale_flow.sh [douve-hub 경로]
 set -u
-export MOAT_LANG=ko # CLI 출력 언어 고정 (영어 확인은 따로)
-HUB=${1:-build/hub/moat-hub}
+export DOUVE_LANG=ko # CLI 출력 언어 고정 (영어 확인은 따로)
+HUB=${1:-build/hub/douve-hub}
 P=18895
 DIR=$(mktemp -d); trap 'kill $(jobs -p) 2>/dev/null; rm -rf "$DIR"' EXIT
 PASS=0; FAIL=0

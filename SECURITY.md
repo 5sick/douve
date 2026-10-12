@@ -8,9 +8,9 @@ issues ship as a new release with a note in the release text.
 
 Only the latest release is supported.
 
-## What Moat is — and what that means for trust
+## What Douve is — and what that means for trust
 
-Moat is a *front door*: it decides who can reach your apps and it can open a root-capable shell on
+Douve is a *front door*: it decides who can reach your apps and it can open a root-capable shell on
 every server it manages. Plan your trust accordingly.
 
 - **The Hub is the crown jewel.** Whoever controls the Hub (or a signed-in session with a fresh
@@ -47,8 +47,8 @@ every server it manages. Plan your trust accordingly.
 
 **The entry (edge) and forward auth**
 - The entry agent terminates TLS (Let's Encrypt via ACME) and checks every request to a protected
-  app against the Hub. Before forwarding, it strips the `moat_session` cookie and any client-sent
-  `X-Moat-User` / `Tailscale-*` headers, then sets `X-Moat-User` itself.
+  app against the Hub. Before forwarding, it strips the `douve_session` cookie and any client-sent
+  `X-Douve-User` / `Tailscale-*` headers, then sets `X-Douve-User` itself.
 - **Fail closed:** if the Hub can't be reached, protected apps are blocked; apps you marked
   public keep working from the entry's saved routing table.
 - HSTS is set on HTTPS responses.
@@ -60,7 +60,7 @@ every server it manages. Plan your trust accordingly.
   entry only forwards to upstreams on the Hub-provided allow-list for that server.
 - Agents update themselves from the Hub and verify the SHA-256 the Hub publishes before replacing
   the binary — so agents trust the Hub (see above).
-- `moat-agent expose` (publishing from a server) is limited to that server's own ports and names
+- `douve-agent expose` (publishing from a server) is limited to that server's own ports and names
   under the base domain, can be turned off, and is alerted and audited.
 
 **Web terminal**
@@ -70,7 +70,7 @@ every server it manages. Plan your trust accordingly.
 **Security monitoring**
 - SSH logins and failures, `sudo`/`su` by non-admin accounts, account changes, changes to
   `passwd`, `shadow`, `sudoers`, `sshd_config`, `authorized_keys`, cron and systemd units, and
-  newly opened public ports. Actions performed in the Moat terminal are attributed to the Moat user
+  newly opened public ports. Actions performed in the Douve terminal are attributed to the Douve user
   and not alerted.
 
 **Tailscale mode**
@@ -79,13 +79,13 @@ every server it manages. Plan your trust accordingly.
 
 **Data at rest**
 - One SQLite database. It contains agent public keys, hashed session tokens, alert credentials
-  (Telegram bot token, Google client secret) and the audit log. Backups (`moat-hub backup` and the
+  (Telegram bot token, Google client secret) and the audit log. Backups (`douve-hub backup` and the
   daily automatic backups) contain the same data and are written with mode 600 — store copies
   safely.
 
 ## Recommendations
 
-- Keep one way into your servers that doesn't depend on Moat (cloud serial console, or SSH over a
+- Keep one way into your servers that doesn't depend on Douve (cloud serial console, or SSH over a
   private network) before closing port 22. See [docs/recovery.md](docs/recovery.md).
 - Register passkeys on two devices and keep your recovery codes off the server.
 - Publish apps as *public* only when they have their own login or are meant to be public.

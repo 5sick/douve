@@ -18,7 +18,7 @@
 #include <mutex>
 #include <string>
 
-namespace moat {
+namespace douve {
 
 class HubApp;
 
@@ -83,4 +83,4 @@ class TerminalGateway : public drogon::WebSocketController<TerminalGateway, fals
     std::deque<Record> history_; // 최근 500개
 };
 
-} // namespace moat
+} // namespace douve

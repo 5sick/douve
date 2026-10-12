@@ -7,7 +7,7 @@
 #include <string>
 #include <vector>
 
-namespace moat {
+namespace douve {
 
 struct Passkey {
     std::int64_t id = 0;
@@ -29,4 +29,4 @@ void updatePasskeyUse(Database& db, std::int64_t id, std::uint32_t signCount, st
 bool deletePasskey(Database& db, std::int64_t userId, std::int64_t id);
 bool renamePasskey(Database& db, std::int64_t userId, std::int64_t id, const std::string& name);
 
-} // namespace moat
+} // namespace douve

@@ -2,7 +2,7 @@
 #include "store/repo.h"
 #include "testing.h"
 
-using namespace moat;
+using namespace douve;
 
 TEST(invite_single_use_and_expiry) {
     Database db(":memory:");

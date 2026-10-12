@@ -14,7 +14,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/5sick/moat/agent/internal/tunnel"
+	"github.com/5sick/douve/agent/internal/tunnel"
 	"golang.org/x/crypto/acme"
 	"golang.org/x/crypto/acme/autocert"
 )
@@ -231,7 +231,7 @@ func (m *Manager) ensureServers() {
 	}()
 }
 
-// withTunnel은 터널 경로(/_moat/tunnel)를 라우팅보다 먼저 받는다 (모든 도메인에서).
+// withTunnel은 터널 경로(/_douve/tunnel)를 라우팅보다 먼저 받는다 (모든 도메인에서).
 func (m *Manager) withTunnel(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == tunnel.Path {

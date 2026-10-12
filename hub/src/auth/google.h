@@ -8,7 +8,7 @@
 #include <optional>
 #include <string>
 
-namespace moat {
+namespace douve {
 
 // PKCE (RFC 7636) S256.
 struct Pkce {
@@ -49,4 +49,4 @@ class GoogleOidc {
     std::int64_t lastFetchAt_ = 0;
 };
 
-} // namespace moat
+} // namespace douve

@@ -10,7 +10,7 @@
 #include <string>
 #include <vector>
 
-namespace moat {
+namespace douve {
 
 // 한 노드의 앱 목록 (JSON 배열). 각 항목:
 //   kind container|process, name, image, port, private_port, upstream, upstream_tls,
@@ -24,4 +24,4 @@ std::string iconFromImage(const std::string& image);
 // 서비스 이름 규칙(영문 소문자·숫자·하이픈, 32자)에 맞춘다
 std::string suggestName(const std::string& s);
 
-} // namespace moat
+} // namespace douve

@@ -10,7 +10,7 @@
 
 #include <unistd.h>
 
-namespace moat {
+namespace douve {
 namespace {
 
 constexpr std::size_t kMaxBody = 1 << 20; // 1 MiB
@@ -90,7 +90,7 @@ HttpResult perform(const std::string& url, const std::optional<std::string>& bod
     curl_easy_setopt(h, CURLOPT_TIMEOUT, timeoutSeconds);
     curl_easy_setopt(h, CURLOPT_CONNECTTIMEOUT, std::min(timeoutSeconds, 5L));
     curl_easy_setopt(h, CURLOPT_NOSIGNAL, 1L);
-    curl_easy_setopt(h, CURLOPT_USERAGENT, "moat-hub");
+    curl_easy_setopt(h, CURLOPT_USERAGENT, "douve-hub");
     curl_easy_setopt(h, CURLOPT_WRITEFUNCTION, onBody);
     curl_easy_setopt(h, CURLOPT_WRITEDATA, &res.body);
     curl_easy_setopt(h, CURLOPT_HEADERFUNCTION, onHeader);
@@ -157,4 +157,4 @@ void httpFetchAsync(std::string url, std::optional<std::string> formBody,
     }).detach();
 }
 
-} // namespace moat
+} // namespace douve

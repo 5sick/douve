@@ -11,7 +11,7 @@
 
 #include <sstream>
 
-namespace moat {
+namespace douve {
 
 using drogon::HttpRequestPtr;
 using drogon::HttpResponsePtr;
@@ -164,4 +164,4 @@ void HubApp::registerSecurityRoutes() {
         {drogon::Post});
 }
 
-} // namespace moat
+} // namespace douve

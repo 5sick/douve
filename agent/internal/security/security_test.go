@@ -35,7 +35,7 @@ func TestJournalParsing(t *testing.T) {
 		journal: func(_ context.Context, cursor string) ([]byte, error) { gotCursor = cursor; return []byte(out), nil },
 		Resolve: func(tty string) string {
 			if tty == "pts/3" {
-				return "sid-moat"
+				return "sid-douve"
 			}
 			return ""
 		}}
@@ -59,8 +59,8 @@ func TestJournalParsing(t *testing.T) {
 				t.Errorf("%+v", e)
 			}
 		case "sudo":
-			if e.Fields["user"] == "rocky" && (e.ViaSID != "sid-moat" || e.Fields["tty"] != "pts/3") {
-				t.Errorf("Moat 터미널 sudo 표시: %+v", e)
+			if e.Fields["user"] == "rocky" && (e.ViaSID != "sid-douve" || e.Fields["tty"] != "pts/3") {
+				t.Errorf("Douve 터미널 sudo 표시: %+v", e)
 			}
 			if e.Fields["user"] == "monitor" && (e.ViaSID != "" || !strings.Contains(e.Fields["command"], "health-check")) {
 				t.Errorf("%+v", e)
@@ -119,10 +119,10 @@ func TestNewPorts(t *testing.T) {
 	c := &Collector{StateDir: dir, files: func() []string { return nil },
 		journal: func(context.Context, string) ([]byte, error) { return nil, nil }}
 	c.load()
-	if ev := c.Collect(context.Background(), []string{"22 sshd", "443 moat-agent"}); len(ev) != 0 {
+	if ev := c.Collect(context.Background(), []string{"22 sshd", "443 douve-agent"}); len(ev) != 0 {
 		t.Fatalf("첫 실행 기준선: %+v", ev)
 	}
-	ev := c.Collect(context.Background(), []string{"22 sshd", "443 moat-agent", "4444 nc"})
+	ev := c.Collect(context.Background(), []string{"22 sshd", "443 douve-agent", "4444 nc"})
 	if len(ev) != 1 || ev[0].Fields["listen"] != "4444 nc" {
 		t.Fatalf("%+v", ev)
 	}
@@ -130,7 +130,7 @@ func TestNewPorts(t *testing.T) {
 	c2 := &Collector{StateDir: dir, files: func() []string { return nil },
 		journal: func(context.Context, string) ([]byte, error) { return nil, nil }}
 	c2.load()
-	if ev := c2.Collect(context.Background(), []string{"22 sshd", "443 moat-agent", "4444 nc"}); len(ev) != 0 {
+	if ev := c2.Collect(context.Background(), []string{"22 sshd", "443 douve-agent", "4444 nc"}); len(ev) != 0 {
 		t.Fatalf("%+v", ev)
 	}
 }

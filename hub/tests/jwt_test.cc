@@ -4,8 +4,8 @@
 
 #include <openssl/core_names.h>
 
-using namespace moat;
-using namespace moat::testing;
+using namespace douve;
+using namespace douve::testing;
 
 namespace {
 

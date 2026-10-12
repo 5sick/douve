@@ -1,6 +1,6 @@
 // 실제 Chromium + 가상 인증기(CDP WebAuthn)로 패스키 전체 흐름을 검증한다.
 // Google 로그인(가짜 서버) → 패스키 등록 → 로그아웃 → 패스키 로그인 → 재인증 후 패스키 삭제
-// 사용: node passkey_flow.mjs [moat-hub 경로]
+// 사용: node passkey_flow.mjs [douve-hub 경로]
 import { spawn, execFileSync } from 'node:child_process';
 import { mkdtempSync, writeFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -9,8 +9,8 @@ import { fileURLToPath } from 'node:url';
 import { chromium } from 'playwright';
 
 const here = dirname(fileURLToPath(import.meta.url));
-const hubBin = resolve(process.argv[2] || join(here, '../../../build/hub/moat-hub'));
-const dir = mkdtempSync(join(tmpdir(), 'moat-e2e-'));
+const hubBin = resolve(process.argv[2] || join(here, '../../../build/hub/douve-hub'));
+const dir = mkdtempSync(join(tmpdir(), 'douve-e2e-'));
 const db = join(dir, 'hub.db');
 const BASE = 'http://localhost:18900';
 const procs = [];

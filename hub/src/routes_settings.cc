@@ -14,7 +14,7 @@
 
 #include <drogon/drogon.h>
 
-namespace moat {
+namespace douve {
 
 using drogon::HttpRequestPtr;
 using drogon::HttpResponsePtr;
@@ -145,7 +145,7 @@ void HubApp::registerSettingsRoutes() {
                 cfg_.telegramApiUrl + "/bot" + c.telegramBotToken + "/sendMessage";
             const std::string form =
                 "chat_id=" + urlEncode(c.telegramChatId) + "&text=" +
-                urlEncode(i18n::translate("[Moat] 테스트 알림입니다. 알림이 잘 연결되었습니다.",
+                urlEncode(i18n::translate("[Douve] 테스트 알림입니다. 알림이 잘 연결되었습니다.",
                                           language()));
             httpFetchAsync(url, form, [cb = std::move(cb)](HttpResult r) {
                 if (r.ok && r.status == 200) {
@@ -192,4 +192,4 @@ void HubApp::registerSettingsRoutes() {
                         {drogon::Post});
 }
 
-} // namespace moat
+} // namespace douve

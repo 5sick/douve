@@ -1,7 +1,7 @@
 #include "cluster/security.h"
 #include "testing.h"
 
-using namespace moat;
+using namespace douve;
 
 namespace {
 SecurityEvent ev(const std::string& kind, Json::Value fields, const std::string& summary,
@@ -99,14 +99,14 @@ TEST(security_issue_lifecycle_and_throttle) {
     CHECK_EQ(resolveSecurityIssues(db, {"x"}, "bogus", 1, 1), 0);
 }
 
-TEST(security_moat_terminal_actions_are_quiet) {
+TEST(security_douve_terminal_actions_are_quiet) {
     auto& db = freshDb();
     SecurityContext ctx;
     ctx.nodeId = 1;
     ctx.nodeName = "n1";
     ctx.terminalUser = [](const std::string& sid) { return sid == "sid1" ? "me@x.com" : ""; };
     ctx.terminalActiveAt = [](std::int64_t ts) { return ts >= 500 && ts <= 700 ? "me@x.com" : ""; };
-    // Moat 터미널 세션의 su → 조용, 출처 기록
+    // Douve 터미널 세션의 su → 조용, 출처 기록
     CHECK(ingestSecurity(
               db, ctx, {ev("su", F({{"user", "ubuntu"}, {"as", "root"}}), "su", 100, "sid1")}, 1000)
               .empty());

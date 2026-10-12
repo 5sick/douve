@@ -19,7 +19,7 @@
 #include <mutex>
 #include <set>
 
-namespace moat {
+namespace douve {
 
 class AgentGateway;
 class TerminalGateway;
@@ -41,7 +41,7 @@ class HubApp {
     void registerSecurityRoutes();
     void registerHomeRoutes();
     void ingestSecurityEvents(std::int64_t nodeId, const Json::Value& msg);
-    // 노드의 `moat-agent expose` 요청 처리 (응답 JSON)
+    // 노드의 `douve-agent expose` 요청 처리 (응답 JSON)
     Json::Value handleExpose(std::int64_t nodeId, const Json::Value& req);
     AgentGateway& agents() { return *gateway_; }
     TerminalGateway& terminals() { return *terminal_; }
@@ -90,7 +90,7 @@ class HubApp {
     // 로그인 관련 요청 횟수 제한. 초과하면 false (감사 로그 기록).
     bool loginAllowed(const drogon::HttpRequestPtr& req);
     // 로그인 성공 처리: 세션 발급 + 감사 로그, 응답에 세션·기기 쿠키를 싣는다.
-    // 같은 기기(moat_device 쿠키)에서 이전에 만든 이 사용자의 세션은 정리된다.
+    // 같은 기기(douve_device 쿠키)에서 이전에 만든 이 사용자의 세션은 정리된다.
     void startSession(const drogon::HttpRequestPtr& req, const drogon::HttpResponsePtr& resp,
                       std::int64_t userId, const std::string& method);
     // startSession + 쿠키를 실은 리다이렉트 응답.
@@ -136,4 +136,4 @@ class HubApp {
     void tickAlerts(std::int64_t now);
 };
 
-} // namespace moat
+} // namespace douve

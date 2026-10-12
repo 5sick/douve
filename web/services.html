@@ -5,7 +5,7 @@
 <script src="/static/i18n-en.js"></script>
 <script src="/static/i18n.js"></script>
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Moat 서비스</title>
+<title>Douve 서비스</title>
 <link rel="icon" href="/favicon.svg" type="image/svg+xml">
 <link rel="icon" href="/favicon.ico" sizes="32x32">
 <link rel="apple-touch-icon" href="/apple-touch-icon.png">
@@ -41,7 +41,7 @@
     <details id="apps-noport-box" class="more" hidden>
       <summary id="apps-noport-title"></summary>
       <div class="meta">호스트에 포트를 열지 않은 컨테이너는 공개할 수 없습니다. 예: <code>-p 127.0.0.1:8080:80</code>
-        (127.0.0.1에만 열어도 Moat가 터널로 연결합니다).</div>
+        (127.0.0.1에만 열어도 Douve가 터널로 연결합니다).</div>
       <ul class="list" id="apps-noport"></ul>
     </details>
   </section>
@@ -69,7 +69,7 @@
       </label>
       <fieldset class="field radios" id="svc-auth-box">
         <legend>접근</legend>
-        <label><input type="radio" name="svc-auth" value="moat" checked> Moat 로그인 필요</label>
+        <label><input type="radio" name="svc-auth" value="douve" checked> Douve 로그인 필요</label>
         <label><input type="radio" name="svc-auth" value="public"> 누구나 (공개)</label>
       </fieldset>
       <label class="field" id="svc-paths-box">로그인 없이 열어둘 경로 (한 줄에 하나, 예: /api/push/)
@@ -82,7 +82,7 @@
             <select id="svc-kind"><option value="proxy">프록시 (업스트림으로 전달)</option><option value="redirect">리다이렉트 (다른 주소로 보냄)</option></select>
           </label>
           <label class="field" id="svc-redirect-box" hidden>보낼 주소 (경로·쿼리는 그대로 붙음)
-            <input id="svc-redirect" placeholder="https://moat.example.com/" autocomplete="off"></label>
+            <input id="svc-redirect" placeholder="https://douve.example.com/" autocomplete="off"></label>
           <label class="field">경로 접두사 (이 경로 아래만 이 서비스로 — 같은 도메인에 여러 서비스)
             <input id="svc-prefix" placeholder="/" autocomplete="off"></label>
           <label class="check" id="svc-strip-box"><input type="checkbox" id="svc-strip"> 업스트림에 넘길 때 접두사 제거 (/api/users → /users)</label>

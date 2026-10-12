@@ -1,6 +1,6 @@
 #pragma once
 // 보안 감시: Agent가 보낸 사건을 분류(심각도·지문)하고 지문별 이슈 상태를 관리한다.
-//   - Moat 웹 터미널에서 일어난 일(via)은 알리지 않는다 (내가 한 일)
+//   - Douve 웹 터미널에서 일어난 일(via)은 알리지 않는다 (내가 한 일)
 //   - 이슈: open(알림) → 사람이 "확인함"(acked: 다시 생기면 알림) 또는 "문제 없음"(ignored: 앞으로
 //   조용)
 //   - 열려 있는 같은 이슈는 6시간에 한 번만 다시 알린다
@@ -15,7 +15,7 @@
 #include <string>
 #include <vector>
 
-namespace moat {
+namespace douve {
 
 struct SecurityEvent {
     std::string kind, summary, viaSid;
@@ -36,9 +36,9 @@ struct SecurityContext {
     std::int64_t nodeId = 0;
     std::string nodeName;
     std::vector<std::string> adminUsers;
-    // Moat 터미널 세션 ID → 사용자 이메일 (없으면 빈 문자열)
+    // Douve 터미널 세션 ID → 사용자 이메일 (없으면 빈 문자열)
     std::function<std::string(const std::string& sid)> terminalUser;
-    // 그 시각 전후로 이 노드에서 Moat 터미널을 쓰던 사용자 (없으면 빈 문자열)
+    // 그 시각 전후로 이 노드에서 Douve 터미널을 쓰던 사용자 (없으면 빈 문자열)
     std::function<std::string(std::int64_t ts)> terminalActiveAt;
 };
 
@@ -55,4 +55,4 @@ void purgeSecurityEvents(Database& db, std::int64_t before);
 
 std::vector<SecurityEvent> parseSecurityEvents(const Json::Value& msg);
 
-} // namespace moat
+} // namespace douve

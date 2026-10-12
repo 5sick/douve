@@ -6,8 +6,8 @@
 
 #include <openssl/evp.h>
 
-using namespace moat;
-using namespace moat::testing;
+using namespace douve;
+using namespace douve::testing;
 
 namespace {
 
@@ -145,12 +145,12 @@ TEST(metrics_bucketed_query_and_purge) {
 #include <fstream>
 
 TEST(agent_release_reads_version_and_sums) {
-    auto dir = std::filesystem::temp_directory_path() / ("moat-rel-" + randomToken(6));
+    auto dir = std::filesystem::temp_directory_path() / ("douve-rel-" + randomToken(6));
     std::filesystem::create_directories(dir);
     CHECK(!loadAgentRelease(dir.string()).has_value()); // 파일 없음
     std::ofstream(dir / "VERSION") << "v1.2.3\n";
-    std::ofstream(dir / "SHA256SUMS") << std::string(64, 'a') << "  moat-agent-linux-amd64\n"
-                                      << std::string(64, 'b') << "  moat-agent-linux-arm64\n"
+    std::ofstream(dir / "SHA256SUMS") << std::string(64, 'a') << "  douve-agent-linux-amd64\n"
+                                      << std::string(64, 'b') << "  douve-agent-linux-arm64\n"
                                       << "garbage line\n"
                                       << std::string(64, 'c') << "  ../../etc/passwd\n";
     auto r = loadAgentRelease(dir.string());

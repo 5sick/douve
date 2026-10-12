@@ -27,12 +27,12 @@ type guard struct {
 	At     time.Time `json:"at"`
 }
 
-// StateDir는 systemd StateDirectory(없으면 /var/lib/moat-agent)다.
+// StateDir는 systemd StateDirectory(없으면 /var/lib/douve-agent)다.
 func StateDir() string {
 	if d := os.Getenv("STATE_DIRECTORY"); d != "" {
 		return d
 	}
-	return "/var/lib/moat-agent"
+	return "/var/lib/douve-agent"
 }
 
 // Apply는 hubURL+path에서 새 바이너리를 받아 exe를 교체한다.
@@ -67,7 +67,7 @@ func Apply(ctx context.Context, hubURL, path, wantSHA, exe, stateDir string) err
 		return fmt.Errorf("다운로드 HTTP %d", resp.StatusCode)
 	}
 
-	tmp := filepath.Join(filepath.Dir(exe), ".moat-agent.new")
+	tmp := filepath.Join(filepath.Dir(exe), ".douve-agent.new")
 	_ = os.Remove(tmp)
 	f, err := os.OpenFile(tmp, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o700)
 	if err != nil {

@@ -4,7 +4,7 @@
 
 #include <vector>
 
-namespace moat {
+namespace douve {
 namespace {
 
 // 스키마 마이그레이션. 순서대로 적용되며, 이미 배포된 항목은 절대 수정하지 않고 새 항목을 추가한다.
@@ -119,7 +119,7 @@ const std::vector<const char*> kMigrations = {
         host         TEXT NOT NULL UNIQUE,              -- 공개 도메인
         node_id      INTEGER REFERENCES nodes(id) ON DELETE SET NULL, -- 서비스가 도는 노드 (상태 확인·알림용)
         upstream     TEXT NOT NULL,                     -- host:port (메시 주소)
-        auth         TEXT NOT NULL DEFAULT 'moat',      -- moat(로그인 필요) | public
+        auth         TEXT NOT NULL DEFAULT 'douve',      -- douve(로그인 필요) | public
         public_paths TEXT NOT NULL DEFAULT '[]',        -- 로그인 없이 허용할 경로 접두사(JSON 배열)
         created_at   INTEGER NOT NULL,
         updated_at   INTEGER NOT NULL
@@ -154,7 +154,7 @@ const std::vector<const char*> kMigrations = {
         fingerprint TEXT NOT NULL,
         summary     TEXT NOT NULL,
         fields      TEXT NOT NULL DEFAULT '{}',
-        via         TEXT NOT NULL DEFAULT '',   -- Moat 터미널 사용자(이메일) 등 출처
+        via         TEXT NOT NULL DEFAULT '',   -- Douve 터미널 사용자(이메일) 등 출처
         status      TEXT NOT NULL               -- open | ignored | auto | info
     );
     CREATE INDEX security_events_ts ON security_events(ts);
@@ -208,7 +208,7 @@ const std::vector<const char*> kMigrations = {
         upstream_tls INTEGER NOT NULL DEFAULT 0,      -- 0 http, 1 https, 2 https(인증서 검증 안 함)
         host_header  TEXT NOT NULL DEFAULT '',        -- 비우면 원래 도메인 유지
         timeout      INTEGER NOT NULL DEFAULT 0,      -- 첫 응답까지 초 (0 = 제한 없음)
-        auth         TEXT NOT NULL DEFAULT 'moat',
+        auth         TEXT NOT NULL DEFAULT 'douve',
         public_paths TEXT NOT NULL DEFAULT '[]',
         created_at   INTEGER NOT NULL,
         updated_at   INTEGER NOT NULL,
@@ -226,7 +226,7 @@ const std::vector<const char*> kMigrations = {
     DROP TABLE services;
     ALTER TABLE services_new RENAME TO services;
     )sql",
-    // v8: 서비스를 만든 곳 (web | node). 노드(moat-agent expose)는 자기가 만든 것만 바꿀 수 있다.
+    // v8: 서비스를 만든 곳 (web | node). 노드(douve-agent expose)는 자기가 만든 것만 바꿀 수 있다.
     R"sql(
     ALTER TABLE services ADD COLUMN origin TEXT NOT NULL DEFAULT 'web';
     )sql",
@@ -246,7 +246,7 @@ const std::vector<const char*> kMigrations = {
     CREATE INDEX recovery_codes_user ON recovery_codes(user_id);
     )sql",
     // v11: 세션의 기기(브라우저) — 같은 기기에서 다시 로그인하면 그 기기의 이전 세션을 정리한다.
-    // 기기 쿠키(moat_device) 원문은 저장하지 않고 SHA-256 hex만.
+    // 기기 쿠키(douve_device) 원문은 저장하지 않고 SHA-256 hex만.
     R"sql(
     ALTER TABLE sessions ADD COLUMN device_hash TEXT NOT NULL DEFAULT '';
     )sql",
@@ -264,6 +264,10 @@ const std::vector<const char*> kMigrations = {
         enabled    INTEGER NOT NULL DEFAULT 1,
         created_at INTEGER NOT NULL
     );
+    )sql",
+    // v14: 이름 변경(Moat → Douve) — 저장된 접근 정책 값 'moat'를 'douve'로
+    R"sql(
+    UPDATE services SET auth = 'douve' WHERE auth = 'moat';
     )sql",
 };
 
@@ -401,7 +405,7 @@ void Database::migrate() {
     int current = schemaVersion();
     if (current > static_cast<int>(kMigrations.size())) {
         throw DbError("DB 스키마(v" + std::to_string(current) +
-                      ")가 이 moat-hub보다 새 버전입니다");
+                      ")가 이 douve-hub보다 새 버전입니다");
     }
     for (int v = current; v < static_cast<int>(kMigrations.size()); ++v) {
         exec("BEGIN");
@@ -434,4 +438,4 @@ void Transaction::commit() {
     done_ = true;
 }
 
-} // namespace moat
+} // namespace douve

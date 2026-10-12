@@ -2,7 +2,7 @@
 
 #include <json/json.h>
 
-namespace moat {
+namespace douve {
 
 std::string takeCompleteUtf8(std::string& carry, const std::string& chunk) {
     std::string s = carry + chunk;
@@ -56,7 +56,7 @@ void Recorder::line(const std::string& json) {
         return;
     if (written_ + json.size() + 1 > kMaxBytes) {
         truncated_ = true;
-        out_ << "[0, \"o\", \"\\r\\n[Moat: 녹화 용량 한도(20MB)에 도달해 이후는 기록하지 "
+        out_ << "[0, \"o\", \"\\r\\n[Douve: 녹화 용량 한도(20MB)에 도달해 이후는 기록하지 "
                 "않음]\\r\\n\"]\n";
         out_.flush();
         return;
@@ -84,4 +84,4 @@ void Recorder::resize(int cols, int rows, double t) {
     line(compact(e));
 }
 
-} // namespace moat
+} // namespace douve

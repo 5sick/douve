@@ -3,7 +3,7 @@
 
 #include <charconv>
 
-namespace moat {
+namespace douve {
 namespace {
 
 // "host:port" 형식. IPv6는 "[::1]:8700".
@@ -59,15 +59,15 @@ std::optional<Options> parseOptions(const std::vector<std::string>& args, std::s
 }
 
 std::string usage() {
-    return T("사용법: moat-hub [--config 파일] [--listen host:port] [--version] [--help]\n"
-             "       moat-hub init --help   (설정 파일 만들기)\n"
-             "       moat-hub join-token --help   (서버 추가 명령 만들기)\n"
-             "       moat-hub service-add --help  (서비스 등록)\n"
-             "       moat-hub invite --help       (초대 링크: 패스키로 사용자 추가)\n"
-             "       moat-hub recovery-codes --help  (비상용 일회용 복구 코드)\n"
-             "       moat-hub backup --help / restore --help  (DB·설정 백업과 복원)\n"
-             "  --config   설정 파일 (예: /etc/moat/hub.json)\n"
+    return T("사용법: douve-hub [--config 파일] [--listen host:port] [--version] [--help]\n"
+             "       douve-hub init --help   (설정 파일 만들기)\n"
+             "       douve-hub join-token --help   (서버 추가 명령 만들기)\n"
+             "       douve-hub service-add --help  (서비스 등록)\n"
+             "       douve-hub invite --help       (초대 링크: 패스키로 사용자 추가)\n"
+             "       douve-hub recovery-codes --help  (비상용 일회용 복구 코드)\n"
+             "       douve-hub backup --help / restore --help  (DB·설정 백업과 복원)\n"
+             "  --config   설정 파일 (예: /etc/douve/hub.json)\n"
              "  --listen   수신 주소 (설정 파일 값보다 우선, 기본 127.0.0.1:8700)\n");
 }
 
-} // namespace moat
+} // namespace douve

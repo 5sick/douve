@@ -3,7 +3,7 @@
 #include <algorithm>
 #include <cctype>
 
-namespace moat {
+namespace douve {
 namespace {
 bool endsWith(const std::string& s, const std::string& suffix) {
     return s.size() >= suffix.size() &&
@@ -43,4 +43,4 @@ std::string safeRedirect(const std::string& target, const HubConfig& cfg,
     return fallback;
 }
 
-} // namespace moat
+} // namespace douve

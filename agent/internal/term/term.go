@@ -235,7 +235,7 @@ func (m *Manager) start(sid, name string, cols, rows uint16) (*session, error) {
 	if m.euid != 0 {
 		cmd := exec.Command(shell, "-l")
 		cmd.Dir = u.HomeDir
-		cmd.Env = append(os.Environ(), "TERM=xterm-256color", "MOAT_TERMINAL=1")
+		cmd.Env = append(os.Environ(), "TERM=xterm-256color", "DOUVE_TERMINAL=1")
 		ptmx, err := pty.StartWithSize(cmd, size)
 		if err != nil {
 			return nil, err
@@ -248,14 +248,14 @@ func (m *Manager) start(sid, name string, cols, rows uint16) (*session, error) {
 	}
 	_ = pty.Setsize(ptmx, size)
 	relabelForInit(tty.Name())
-	unit := "moat-term-" + sid
+	unit := "douve-term-" + sid
 	cmd := exec.Command("systemd-run", "--wait", "--quiet", "--collect",
 		"--unit="+unit, "--uid="+name,
 		"-p", "WorkingDirectory=~",
 		// 기다리지 않고 바로 이 PTY를 제어 터미널로 (tty 모드는 inotify watch가 필요하고 SELinux가 막음)
 		"-p", "StandardInput=tty-force", "-p", "StandardOutput=tty", "-p", "StandardError=tty",
 		"-p", "TTYPath="+tty.Name(), // 새 PTY라 TTYReset/TTYVHangup 불필요 (먼저 들어온 입력을 지움)
-		"--setenv=TERM=xterm-256color", "--setenv=MOAT_TERMINAL=1",
+		"--setenv=TERM=xterm-256color", "--setenv=DOUVE_TERMINAL=1",
 		"--", shell, "-l")
 	var errBuf strings.Builder
 	cmd.Stdout = &errBuf
@@ -465,7 +465,7 @@ func (m *Manager) ReapIdle() {
 	}
 }
 
-// TTYOwner는 pts(예: "pts/3")가 Moat 터미널 세션(진행 중이거나 2분 안에 끝난)이면 세션 ID를 돌려준다.
+// TTYOwner는 pts(예: "pts/3")가 Douve 터미널 세션(진행 중이거나 2분 안에 끝난)이면 세션 ID를 돌려준다.
 func (m *Manager) TTYOwner(tty string) string {
 	path := "/dev/" + strings.TrimPrefix(tty, "/dev/")
 	m.mu.Lock()

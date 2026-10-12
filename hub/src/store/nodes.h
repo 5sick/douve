@@ -8,7 +8,7 @@
 #include <string>
 #include <vector>
 
-namespace moat {
+namespace douve {
 
 struct Node {
     std::int64_t id = 0;
@@ -88,4 +88,4 @@ void resolveAlert(Database& db, std::int64_t id, std::int64_t now);
 // 이름 규칙: 영문 소문자·숫자·하이픈, 1~32자.
 std::string sanitizeNodeName(const std::string& raw);
 
-} // namespace moat
+} // namespace douve

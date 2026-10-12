@@ -29,7 +29,7 @@ import (
 
 	"github.com/coder/websocket"
 
-	"github.com/5sick/moat/agent/internal/tunnel"
+	"github.com/5sick/douve/agent/internal/tunnel"
 )
 
 const goodToken = "good-session-token-0123456789abcdef"
@@ -40,7 +40,7 @@ func fakeHub(t *testing.T, calls *atomic.Int32) *httptest.Server {
 		calls.Add(1)
 		c, err := r.Cookie(sessionCookie)
 		if err == nil && c.Value == goodToken {
-			w.Header().Set("X-Moat-User", "me@example.com")
+			w.Header().Set("X-Douve-User", "me@example.com")
 			w.WriteHeader(http.StatusOK)
 			return
 		}
@@ -67,7 +67,7 @@ func upstream(t *testing.T) *httptest.Server {
 			"host":   r.Host,
 			"path":   r.URL.RequestURI(),
 			"cookie": r.Header.Get("Cookie"),
-			"user":   r.Header.Get("X-Moat-User"),
+			"user":   r.Header.Get("X-Douve-User"),
 			"xff":    r.Header.Get("X-Forwarded-For"),
 			"proto":  r.Header.Get("X-Forwarded-Proto"),
 			"realip": r.Header.Get("X-Real-IP"),
@@ -84,12 +84,12 @@ func setup(t *testing.T) (*Handler, *httptest.Server, *atomic.Int32, *httptest.S
 	h := NewHandler(slog.New(slog.NewTextHandler(io.Discard, nil)))
 	tbl := &Table{
 		VerifyURL: hub.URL + "/auth/verify",
-		LoginURL:  "https://moat.example.com/login",
+		LoginURL:  "https://douve.example.com/login",
 		Routes: []Route{
-			{Host: "app.example.com", Upstream: strings.TrimPrefix(up.URL, "http://"), Auth: "moat",
+			{Host: "app.example.com", Upstream: strings.TrimPrefix(up.URL, "http://"), Auth: "douve",
 				PublicPaths: []string{"/api/push/", "/status"}},
 			{Host: "open.example.com", Upstream: strings.TrimPrefix(up.URL, "http://"), Auth: "public"},
-			{Host: "moat.example.com", Upstream: strings.TrimPrefix(up.URL, "http://"), Auth: "hub"},
+			{Host: "douve.example.com", Upstream: strings.TrimPrefix(up.URL, "http://"), Auth: "hub"},
 		},
 	}
 	if err := tbl.Validate(); err != nil {
@@ -128,7 +128,7 @@ func TestProtectedRedirectsToLoginWithEncodedReturnURL(t *testing.T) {
 		t.Fatalf("status %d", resp.StatusCode)
 	}
 	loc, _ := url.Parse(resp.Header.Get("Location"))
-	if loc.Host != "moat.example.com" || loc.Path != "/login" {
+	if loc.Host != "douve.example.com" || loc.Path != "/login" {
 		t.Fatalf("location %s", loc)
 	}
 	// nginx 방식은 & 뒤가 잘렸다. 여기서는 전체 주소가 보존되어야 한다.
@@ -147,15 +147,15 @@ func TestProtectedRedirectsToLoginWithEncodedReturnURL(t *testing.T) {
 func TestProtectedPassesWithSessionAndStripsCookie(t *testing.T) {
 	_, srv, calls, _ := setup(t)
 	hdr := map[string]string{
-		"Cookie":      sessionCookie + "=" + goodToken + "; app_pref=dark",
-		"X-Moat-User": "attacker@evil.com", // 위조 헤더
+		"Cookie":       sessionCookie + "=" + goodToken + "; app_pref=dark",
+		"X-Douve-User": "attacker@evil.com", // 위조 헤더
 	}
 	resp, body := get(t, srv, "app.example.com", "/page", hdr)
 	if resp.StatusCode != http.StatusOK {
 		t.Fatalf("status %d", resp.StatusCode)
 	}
 	if body["user"] != "me@example.com" {
-		t.Fatalf("X-Moat-User %q (위조 헤더가 통과?)", body["user"])
+		t.Fatalf("X-Douve-User %q (위조 헤더가 통과?)", body["user"])
 	}
 	if strings.Contains(body["cookie"], sessionCookie) || !strings.Contains(body["cookie"], "app_pref=dark") {
 		t.Fatalf("업스트림 쿠키 %q", body["cookie"])
@@ -192,7 +192,7 @@ func TestPublicPathsAndPublicRoute(t *testing.T) {
 			t.Fatalf("%s는 보호되어야 함: %d", p, resp.StatusCode)
 		}
 	}
-	resp, body := get(t, srv, "open.example.com", "/", map[string]string{"Cookie": sessionCookie + "=" + goodToken, "X-Moat-User": "x"})
+	resp, body := get(t, srv, "open.example.com", "/", map[string]string{"Cookie": sessionCookie + "=" + goodToken, "X-Douve-User": "x"})
 	if resp.StatusCode != http.StatusOK || body["user"] != "" || body["cookie"] != "" {
 		t.Fatalf("공개 라우트 %d %+v", resp.StatusCode, body)
 	}
@@ -200,7 +200,7 @@ func TestPublicPathsAndPublicRoute(t *testing.T) {
 
 func TestHubRouteKeepsCookie(t *testing.T) {
 	_, srv, _, _ := setup(t)
-	_, body := get(t, srv, "moat.example.com", "/login", map[string]string{"Cookie": sessionCookie + "=abc"})
+	_, body := get(t, srv, "douve.example.com", "/login", map[string]string{"Cookie": sessionCookie + "=abc"})
 	if !strings.Contains(body["cookie"], sessionCookie+"=abc") {
 		t.Fatalf("Hub로 쿠키가 전달되어야 함: %+v", body)
 	}
@@ -213,10 +213,10 @@ func TestStripsTailscaleIdentityHeaders(t *testing.T) {
 	defer up.Close()
 	h := NewHandler(slog.New(slog.NewTextHandler(io.Discard, nil)))
 	h.SetTable(&Table{VerifyURL: "http://x/v", LoginURL: "https://x/l",
-		Routes: []Route{{Host: "moat.example.com", Upstream: strings.TrimPrefix(up.URL, "http://"), Auth: "hub"}}})
+		Routes: []Route{{Host: "douve.example.com", Upstream: strings.TrimPrefix(up.URL, "http://"), Auth: "hub"}}})
 	srv := httptest.NewServer(h)
 	defer srv.Close()
-	get(t, srv, "moat.example.com", "/", map[string]string{"Tailscale-User-Login": "admin@example.com", "Tailscale-User-Name": "x"})
+	get(t, srv, "douve.example.com", "/", map[string]string{"Tailscale-User-Login": "admin@example.com", "Tailscale-User-Name": "x"})
 	hdr := <-seen
 	if hdr.Get("Tailscale-User-Login") != "" || hdr.Get("Tailscale-User-Name") != "" {
 		t.Fatalf("Tailscale 헤더가 Hub로 넘어감: %v", hdr)
@@ -284,10 +284,10 @@ func TestValidateRejectsBadTables(t *testing.T) {
 	ok := Table{VerifyURL: "http://h/auth/verify", LoginURL: "https://h/login"}
 	bad := []Route{
 		{Host: "a.com", Upstream: "x:1", Auth: "nope"},
-		{Host: "a.com/x", Upstream: "x:1", Auth: "moat"},
-		{Host: "a.com", Upstream: "http://x:1", Auth: "moat"},
-		{Host: "a.com", Upstream: "x:1", Auth: "moat", PublicPaths: []string{"/"}},
-		{Host: "a.com", Upstream: "x:1", Auth: "moat", PublicPaths: []string{"api"}},
+		{Host: "a.com/x", Upstream: "x:1", Auth: "douve"},
+		{Host: "a.com", Upstream: "http://x:1", Auth: "douve"},
+		{Host: "a.com", Upstream: "x:1", Auth: "douve", PublicPaths: []string{"/"}},
+		{Host: "a.com", Upstream: "x:1", Auth: "douve", PublicPaths: []string{"api"}},
 	}
 	for _, r := range bad {
 		tb := ok
@@ -297,7 +297,7 @@ func TestValidateRejectsBadTables(t *testing.T) {
 		}
 	}
 	dup := ok
-	dup.Routes = []Route{{Host: "a.com", Upstream: "x:1", Auth: "moat"}, {Host: "A.com.", Upstream: "y:1", Auth: "public"}}
+	dup.Routes = []Route{{Host: "a.com", Upstream: "x:1", Auth: "douve"}, {Host: "A.com.", Upstream: "y:1", Auth: "public"}}
 	if dup.Validate() == nil {
 		t.Error("중복 호스트")
 	}
@@ -415,7 +415,7 @@ func TestRouteOptions(t *testing.T) {
 		{Host: "app.example.com", Upstream: host(web.URL), Auth: "public"},
 		{Host: "app.example.com", PathPrefix: "/api", StripPrefix: true, Upstream: host(api.URL), Auth: "public"},
 		{Host: "app.example.com", PathPrefix: "/api/v2", Upstream: host(web.URL), Auth: "public", Timeout: 1},
-		{Host: "example.com", Kind: "redirect", RedirectTo: "https://moat.example.com/"},
+		{Host: "example.com", Kind: "redirect", RedirectTo: "https://douve.example.com/"},
 		{Host: "pve.example.com", Upstream: host(tlsUp.URL), UpstreamTLS: 2, HostHeader: "pve.internal", Auth: "public"},
 		{Host: "strict.example.com", Upstream: host(tlsUp.URL), UpstreamTLS: 1, Auth: "public"},
 	}}
@@ -447,7 +447,7 @@ func TestRouteOptions(t *testing.T) {
 		t.Errorf("타임아웃 → 502: %d", resp.StatusCode)
 	}
 	resp, _ = get(t, srv, "example.com", "/a/b?c=1", nil)
-	if resp.StatusCode != http.StatusFound || resp.Header.Get("Location") != "https://moat.example.com/a/b?c=1" {
+	if resp.StatusCode != http.StatusFound || resp.Header.Get("Location") != "https://douve.example.com/a/b?c=1" {
 		t.Errorf("리다이렉트 %d %s", resp.StatusCode, resp.Header.Get("Location"))
 	}
 	resp, b = get(t, srv, "pve.example.com", "/", nil)
@@ -517,5 +517,16 @@ func TestIsLoopback(t *testing.T) {
 		if got := isLoopback(addr); got != want {
 			t.Fatalf("%s: %v", addr, got)
 		}
+	}
+}
+
+func TestLegacyMoatPolicy(t *testing.T) {
+	tb := &Table{VerifyURL: "http://h/auth/verify", LoginURL: "https://h/login",
+		Routes: []Route{{Host: "a.example.com", Upstream: "127.0.0.1:1", Auth: "moat"}}}
+	if err := tb.Validate(); err != nil {
+		t.Fatal(err)
+	}
+	if tb.Routes[0].Auth != "douve" {
+		t.Fatalf("이전 이름의 정책은 로그인 필요로: %q", tb.Routes[0].Auth)
 	}
 }

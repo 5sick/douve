@@ -5,7 +5,7 @@
 #include <algorithm>
 #include <cctype>
 
-namespace moat {
+namespace douve {
 
 Invite createInvite(Database& db, const std::string& email, std::optional<std::int64_t> createdBy,
                     int ttlSeconds, std::int64_t now) {
@@ -73,4 +73,4 @@ void deleteSetting(Database& db, const std::string& key) {
     s.bind(1, key).run();
 }
 
-} // namespace moat
+} // namespace douve

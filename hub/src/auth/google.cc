@@ -11,7 +11,7 @@
 
 #include <regex>
 
-namespace moat {
+namespace douve {
 
 Pkce makePkce() {
     Pkce p;
@@ -121,4 +121,4 @@ void GoogleOidc::completeLogin(const std::string& code, const std::string& verif
     });
 }
 
-} // namespace moat
+} // namespace douve

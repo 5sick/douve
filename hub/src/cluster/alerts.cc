@@ -3,7 +3,7 @@
 #include <cmath>
 #include <set>
 
-namespace moat {
+namespace douve {
 namespace {
 
 std::string pct(double v) {
@@ -107,4 +107,4 @@ std::string alertResolvedText(const std::string& nodeName, const OpenAlert& a, s
            " 지속)";
 }
 
-} // namespace moat
+} // namespace douve

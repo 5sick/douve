@@ -1,12 +1,12 @@
 #include "soft_authenticator.h"
 #include "testing.h"
 
-using namespace moat;
-using namespace moat::webauthn;
-using namespace moat::testing;
+using namespace douve;
+using namespace douve::webauthn;
+using namespace douve::testing;
 
 namespace {
-const std::string kOrigin = "https://moat.example.com";
+const std::string kOrigin = "https://douve.example.com";
 const std::string kRpId = "example.com";
 
 Expectations expect(const Bytes& challenge) {
@@ -49,7 +49,7 @@ TEST(webauthn_register_rejects_wrong_context) {
     std::string err;
     auto ch = randomBytes(32);
     // 다른 origin (피싱 사이트)
-    auto r1 = a.create(ch, "https://moat.example.com.evil.com", kRpId);
+    auto r1 = a.create(ch, "https://douve.example.com.evil.com", kRpId);
     CHECK(!verifyRegistration(r1.clientDataJson, r1.attestationObject, expect(ch), err));
     // 다른 challenge (재전송)
     auto r2 = a.create(randomBytes(32), kOrigin, kRpId);

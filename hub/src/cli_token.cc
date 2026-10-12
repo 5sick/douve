@@ -12,10 +12,10 @@
 #include <ctime>
 #include <iostream>
 
-namespace moat {
+namespace douve {
 namespace {
 
-const char* kUsage = "사용: moat-hub join-token [--config /etc/moat/hub.json] [--name 이름] "
+const char* kUsage = "사용: douve-hub join-token [--config /etc/douve/hub.json] [--name 이름] "
                      "[--ttl-minutes 15] [--connect-url URL]\n"
                      "  --connect-url  Agent가 접속할 주소를 바꿀 때 (예: WireGuard 내부 "
                      "http://10.200.0.2:8700)\n";
@@ -36,7 +36,7 @@ void matchOwner(const std::string& dbPath) {
 } // namespace
 
 int runJoinToken(const std::vector<std::string>& args) {
-    std::string configPath = "/etc/moat/hub.json", name, connectUrl;
+    std::string configPath = "/etc/douve/hub.json", name, connectUrl;
     int ttlMinutes = 15;
     for (std::size_t i = 0; i < args.size(); ++i) {
         const auto& a = args[i];
@@ -85,7 +85,7 @@ int runJoinToken(const std::vector<std::string>& args) {
             audit(db, std::nullopt, "join_token_created", "cli", sanitizeNodeName(name), now);
         }
         matchOwner(cfg->databasePath);
-        std::string env = connectUrl.empty() ? "" : "MOAT_CONNECT_URL=" + connectUrl + " ";
+        std::string env = connectUrl.empty() ? "" : "DOUVE_CONNECT_URL=" + connectUrl + " ";
         std::cout << "curl -fsSL " << cfg->publicUrl << "/join.sh | sudo " << env << "sh -s -- "
                   << tok.token << "\n";
         std::cerr << "(" << ttlMinutes << T("분 동안 한 번만 사용 가능)\n");
@@ -96,4 +96,4 @@ int runJoinToken(const std::vector<std::string>& args) {
     return 0;
 }
 
-} // namespace moat
+} // namespace douve

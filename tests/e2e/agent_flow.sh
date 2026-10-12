@@ -1,11 +1,11 @@
 #!/bin/bash
-# Agent E2E: moat-hub + 실제 moat-agent 프로세스로 join → 접속 → 메트릭 → 삭제 흐름을 검증한다.
-# 사용: tests/e2e/agent_flow.sh [moat-hub 경로] [dist 디렉터리]
+# Agent E2E: douve-hub + 실제 douve-agent 프로세스로 join → 접속 → 메트릭 → 삭제 흐름을 검증한다.
+# 사용: tests/e2e/agent_flow.sh [douve-hub 경로] [dist 디렉터리]
 set -u
-export MOAT_LANG=ko # CLI 출력 언어 고정 (영어 확인은 따로)
-HUB=${1:-build/hub/moat-hub}
+export DOUVE_LANG=ko # CLI 출력 언어 고정 (영어 확인은 따로)
+HUB=${1:-build/hub/douve-hub}
 DIST=$(cd "${2:-dist}" && pwd)
-AGENT="$DIST/moat-agent-linux-$(uname -m | sed 's/x86_64/amd64/; s/aarch64/arm64/')"
+AGENT="$DIST/douve-agent-linux-$(uname -m | sed 's/x86_64/amd64/; s/aarch64/arm64/')"
 PORT=18810
 BASE="http://localhost:$PORT"
 DIR=$(mktemp -d); trap 'kill $(jobs -p) 2>/dev/null; rm -rf "$DIR"' EXIT
@@ -16,7 +16,7 @@ bad()  { echo "  FAIL $1"; FAIL=$((FAIL+1)); }
 if ss -ltn | grep -q ":$PORT "; then echo "포트 $PORT 사용 중"; exit 1; fi
 
 # Hub가 배포하는 Agent 릴리스 (자동 업데이트 시험 때 VERSION만 바꾼다)
-mkdir -p "$DIR/rel"; cp "$DIST"/moat-agent-linux-* "$DIST/SHA256SUMS" "$DIR/rel/"
+mkdir -p "$DIR/rel"; cp "$DIST"/douve-agent-linux-* "$DIST/SHA256SUMS" "$DIR/rel/"
 "$AGENT" version | awk '{print $2}' > "$DIR/rel/VERSION"
 cat > "$DIR/hub.json" <<JSON
 {"public_url":"$BASE","cookie_domain":"localhost","database_path":"$DIR/hub.db",
@@ -38,14 +38,14 @@ PY
 }
 mksession fresh-session-token-0123456789abcdef "$(date +%s)"
 mksession stale-session-token-0123456789abcdef 1000
-C="Cookie: moat_session=fresh-session-token-0123456789abcdef"
+C="Cookie: douve_session=fresh-session-token-0123456789abcdef"
 O="Origin: $BASE"
 api() { curl -s -H "$C" "$@"; }
 
 echo "[agent_flow]"
 code=$(curl -s -o /dev/null -w '%{http_code}' -X POST -H "$C" -H 'Content-Type: application/json' -d '{}' "$BASE/api/nodes/join-token")
 [ "$code" = 403 ] && ok "Origin 없는 토큰 발급 거부(CSRF)" || bad "CSRF ($code)"
-out=$(curl -s -X POST -H "Cookie: moat_session=stale-session-token-0123456789abcdef" -H "$O" -H 'Content-Type: application/json' -d '{}' "$BASE/api/nodes/join-token")
+out=$(curl -s -X POST -H "Cookie: douve_session=stale-session-token-0123456789abcdef" -H "$O" -H 'Content-Type: application/json' -d '{}' "$BASE/api/nodes/join-token")
 case "$out" in *reauth_required*) ok "패스키 재확인 없으면 토큰 발급 거부" ;; *) bad "재확인 ($out)";; esac
 out=$(api -X POST -H "$O" -H 'Content-Type: application/json' -d '{"name":"Test Node"}' "$BASE/api/nodes/join-token")
 TOKEN=$(echo "$out" | python3 -c 'import json,sys; print(json.load(sys.stdin)["token"])' 2>/dev/null)
@@ -64,17 +64,17 @@ code=$(curl -s -o /dev/null -w '%{http_code}' "$BASE/dl/hub.json")
 
 A="$DIR/agent"
 "$AGENT" join --dir "$A" --hub "http://127.0.0.1:$PORT" --token "$TOKEN" >"$DIR/join.log" 2>&1 \
-    && ok "moat-agent join" || bad "join ($(cat "$DIR/join.log"))"
+    && ok "douve-agent join" || bad "join ($(cat "$DIR/join.log"))"
 [ "$(stat -c %a "$A/key")" = 600 ] && ok "개인키 권한 600" || bad "키 권한"
 "$AGENT" join --dir "$DIR/agent2" --hub "http://127.0.0.1:$PORT" --token "$TOKEN" >/dev/null 2>&1 \
     && bad "토큰 재사용이 허용됨" || ok "토큰 재사용 거부"
-"$AGENT" join --dir "$DIR/agent3" --hub "http://moat.example.com" --token x >/dev/null 2>&1 \
+"$AGENT" join --dir "$DIR/agent3" --hub "http://douve.example.com" --token x >/dev/null 2>&1 \
     && bad "공용 http 허용됨" || ok "공용 인터넷 평문 http 거부"
 
 # CLI로 만든 토큰 (웹 화면 없이 서버 추가)
 cmd=$("$HUB" join-token --config "$DIR/hub.json" --name cli-node --connect-url "http://127.0.0.1:$PORT" 2>/dev/null)
 CLI_TOKEN=${cmd##* }
-case "$cmd" in *"MOAT_CONNECT_URL=http://127.0.0.1:$PORT sh -s -- "*) ok "join-token CLI 명령 형식" ;; *) bad "CLI 명령 ($cmd)";; esac
+case "$cmd" in *"DOUVE_CONNECT_URL=http://127.0.0.1:$PORT sh -s -- "*) ok "join-token CLI 명령 형식" ;; *) bad "CLI 명령 ($cmd)";; esac
 "$AGENT" join --dir "$DIR/cli" --hub "http://127.0.0.1:$PORT" --token "$CLI_TOKEN" >/dev/null 2>&1 \
     && ok "CLI 토큰으로 등록" || bad "CLI 토큰 등록"
 
@@ -108,7 +108,7 @@ connected=$(api "$BASE/api/nodes" | python3 -c 'import json,sys; print([x for x 
 [ "$connected" = True ] && ok "사칭 시도가 정상 접속을 끊지 않음" || bad "정상 접속 끊김"
 
 # 노드 삭제 → 접속 종료, 재접속 거부
-code=$(curl -s -o /dev/null -w '%{http_code}' -X POST -H "Cookie: moat_session=stale-session-token-0123456789abcdef" -H "$O" -H 'Content-Type: application/json' -d '{"id":1}' "$BASE/api/nodes/delete")
+code=$(curl -s -o /dev/null -w '%{http_code}' -X POST -H "Cookie: douve_session=stale-session-token-0123456789abcdef" -H "$O" -H 'Content-Type: application/json' -d '{"id":1}' "$BASE/api/nodes/delete")
 [ "$code" = 403 ] && ok "재확인 없이 노드 삭제 거부" || bad "삭제 재확인 ($code)"
 out=$(api -X POST -H "$O" -H 'Content-Type: application/json' -d '{"id":1}' "$BASE/api/nodes/delete")
 case "$out" in *'"ok"'*) ok "노드 삭제" ;; *) bad "삭제 ($out)";; esac
@@ -118,13 +118,13 @@ kill $AGENT_PID 2>/dev/null
 
 # 자동 업데이트: Hub의 버전이 다르면 Agent가 받아서 교체한 뒤 같은 PID에서 새 실행 파일로 exec (입구 끊김 최소화).
 # 교체된 실행 파일도 같은 지시를 받지만 1시간 내 같은 체크섬은 건너뛰고 접속을 유지해야 한다.
-mkdir -p "$DIR/bin"; cp "$AGENT" "$DIR/bin/moat-agent"
+mkdir -p "$DIR/bin"; cp "$AGENT" "$DIR/bin/douve-agent"
 echo "e2e-next" > "$DIR/rel/VERSION"
-STATE_DIRECTORY="$DIR/state" timeout 8 "$DIR/bin/moat-agent" run --dir "$DIR/cli" >"$DIR/upd.log" 2>&1
+STATE_DIRECTORY="$DIR/state" timeout 8 "$DIR/bin/douve-agent" run --dir "$DIR/cli" >"$DIR/upd.log" 2>&1
 rc=$?
-grep -q "새 버전으로 재시작" "$DIR/upd.log" && [ "$(grep -c 'moat-agent 시작' "$DIR/upd.log")" = 2 ] \
+grep -q "새 버전으로 재시작" "$DIR/upd.log" && [ "$(grep -c 'douve-agent 시작' "$DIR/upd.log")" = 2 ] \
     && ok "자동 업데이트 → 같은 프로세스에서 새 실행 파일로 교체" || bad "자동 업데이트 ($(tail -4 "$DIR/upd.log"))"
-cmp -s "$DIR/bin/moat-agent" "$AGENT" && [ -x "$DIR/bin/moat-agent" ] && ok "교체된 실행 파일 체크섬·권한" || bad "교체 파일"
+cmp -s "$DIR/bin/douve-agent" "$AGENT" && [ -x "$DIR/bin/douve-agent" ] && ok "교체된 실행 파일 체크섬·권한" || bad "교체 파일"
 grep -q "최근에 같은 업데이트" "$DIR/upd.log" && [ $rc = 124 ] && [ "$(grep -c 'Hub 접속 완료' "$DIR/upd.log")" -ge 2 ] \
     && ok "같은 업데이트 반복 방지 (교체 후에도 접속 유지)" || bad "반복 방지 (rc=$rc)"
 grep -q "Agent 업데이트 지시" "$DIR/hub.log" && ok "Hub 업데이트 지시 로그" || bad "Hub 로그"

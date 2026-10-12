@@ -13,12 +13,12 @@
 #include <ctime>
 #include <iostream>
 
-namespace moat {
+namespace douve {
 namespace {
 
 const char* kUsage =
-    "사용: moat-hub service-add --name 이름 --host 도메인 --upstream 주소:포트\n"
-    "         [--node 노드이름] [--auth moat|public] [--public-path /경로/ ...] [--config 파일]\n";
+    "사용: douve-hub service-add --name 이름 --host 도메인 --upstream 주소:포트\n"
+    "         [--node 노드이름] [--auth douve|public] [--public-path /경로/ ...] [--config 파일]\n";
 
 std::string hostOfUrl(const std::string& url) {
     auto start = url.find("://");
@@ -42,7 +42,7 @@ void matchOwner(const std::string& dbPath) {
 } // namespace
 
 int runServiceAdd(const std::vector<std::string>& args) {
-    std::string configPath = "/etc/moat/hub.json", nodeName;
+    std::string configPath = "/etc/douve/hub.json", nodeName;
     Service s;
     for (std::size_t i = 0; i < args.size(); ++i) {
         const auto& a = args[i];
@@ -116,7 +116,7 @@ int runServiceAdd(const std::vector<std::string>& args) {
 }
 
 int runNodeSet(const std::vector<std::string>& args) {
-    std::string configPath = "/etc/moat/hub.json", name, edge, portForward;
+    std::string configPath = "/etc/douve/hub.json", name, edge, portForward;
     for (std::size_t i = 0; i + 1 < args.size(); i += 2) {
         if (args[i] == "--config")
             configPath = args[i + 1];
@@ -130,7 +130,7 @@ int runNodeSet(const std::vector<std::string>& args) {
     auto onOff = [](const std::string& v) { return v.empty() || v == "on" || v == "off"; };
     if (name.empty() || (edge.empty() && portForward.empty()) || !onOff(edge) ||
         !onOff(portForward)) {
-        std::cerr << T("사용: moat-hub node-set --name 노드 [--edge on|off] [--port-forward "
+        std::cerr << T("사용: douve-hub node-set --name 노드 [--edge on|off] [--port-forward "
                        "on|off] [--config 파일]\n");
         return 2;
     }
@@ -177,4 +177,4 @@ int runNodeSet(const std::vector<std::string>& args) {
     return 0;
 }
 
-} // namespace moat
+} // namespace douve

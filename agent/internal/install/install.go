@@ -1,4 +1,4 @@
-// Package install은 `moat-agent install`: 빈 서버에 Moat(Hub + 이 서버의 Agent)를 설치한다.
+// Package install은 `douve-agent install`: 빈 서버에 Douve(Hub + 이 서버의 Agent)를 설치한다.
 //
 // 대화형(번호 선택, Enter = 추천)이며 같은 선택을 옵션으로 줄 수 있다.
 // 다른 서버 추가는 웹의 "서버 추가"(설치 질문 없음 — Hub 설정을 받아 그대로)로 한다.
@@ -22,25 +22,25 @@ import (
 	"strings"
 	"time"
 
-	"github.com/5sick/moat/agent/internal/collect"
-	"github.com/5sick/moat/agent/internal/i18n"
-	"github.com/5sick/moat/agent/internal/portmap"
+	"github.com/5sick/douve/agent/internal/collect"
+	"github.com/5sick/douve/agent/internal/i18n"
+	"github.com/5sick/douve/agent/internal/portmap"
 )
 
 // Options는 설치 선택이다. 비어 있는 값은 대화형으로 묻는다 (Yes면 추천값).
 type Options struct {
 	Mode       string // tailscale | public
-	Domain     string // public: Moat 주소 (예: moat.example.com)
+	Domain     string // public: Douve 주소 (예: douve.example.com)
 	Email      string // public: 관리자 이메일 (첫 초대·인증서 연락처)
 	Features   string // recommended | custom (custom이면 항목별로 묻는다)
 	FeatureSet map[string]bool
 	Yes        bool   // 묻지 않고 추천값
-	From       string // 로컬 릴리스 폴더 (moat-hub-linux-*, moat-agent-linux-*, SHA256SUMS, VERSION)
+	From       string // 로컬 릴리스 폴더 (douve-hub-linux-*, douve-agent-linux-*, SHA256SUMS, VERSION)
 	Release    string // 릴리스 주소 (기본 GitHub 최신)
 	TestPlain  bool   // 시험용: 입구를 :80 평문으로 (인증서 없이)
 }
 
-const DefaultRelease = "https://github.com/5sick/moat/releases/latest/download"
+const DefaultRelease = "https://github.com/5sick/douve/releases/latest/download"
 
 type Installer struct {
 	Opt         Options
@@ -140,7 +140,7 @@ func run(name string, args ...string) (string, error) {
 
 // Run은 설치 전체다.
 func (s *Installer) Run(ctx context.Context) error {
-	s.say("Moat 설치 — 작은 서버들을 위한 보안 현관")
+	s.say("Douve 설치 — 작은 서버들을 위한 보안 현관")
 	if err := s.preflight(); err != nil {
 		return err
 	}
@@ -152,7 +152,7 @@ func (s *Installer) Run(ctx context.Context) error {
 		return errors.New(i18n.T("취소했습니다"))
 	}
 	var err error
-	s.tmp, err = os.MkdirTemp("", "moat-install-")
+	s.tmp, err = os.MkdirTemp("", "douve-install-")
 	if err != nil {
 		return err
 	}
@@ -166,7 +166,7 @@ func (s *Installer) Run(ctx context.Context) error {
 	if err := s.installHub(ctx); err != nil {
 		return err
 	}
-	s.step(3, "이 서버를 Moat에 등록 (Agent)")
+	s.step(3, "이 서버를 Douve에 등록 (Agent)")
 	if err := s.installAgent(ctx); err != nil {
 		return err
 	}
@@ -187,8 +187,8 @@ func (s *Installer) preflight() error {
 	default:
 		return fmt.Errorf(i18n.T("지원하지 않는 CPU: %s"), runtime.GOARCH)
 	}
-	if _, err := os.Stat("/etc/moat/hub.json"); err == nil {
-		return errors.New(i18n.T("이미 Moat가 설치되어 있습니다 (/etc/moat/hub.json). 업그레이드는 웹 설정 또는 install-hub를 쓰세요"))
+	if _, err := os.Stat("/etc/douve/hub.json"); err == nil {
+		return errors.New(i18n.T("이미 Douve가 설치되어 있습니다 (/etc/douve/hub.json). 업그레이드는 웹 설정 또는 install-hub를 쓰세요"))
 	}
 	return nil
 }
@@ -244,12 +244,12 @@ func (s *Installer) decide() error {
 			s.Opt.Email = strings.ToLower(u.LoginName)
 		}
 		if s.Opt.Email == "" {
-			s.Opt.Email = s.ask("Moat를 쓸 Tailscale 사용자 (로그인 이메일)", "")
+			s.Opt.Email = s.ask("Douve를 쓸 Tailscale 사용자 (로그인 이메일)", "")
 		}
 	case "public":
 		if s.Opt.Domain == "" {
 			s.say("\n  도메인의 DNS에서 이 주소(와 *.같은 도메인)를 이 서버의 공인 IP로 연결해 두세요.")
-			s.Opt.Domain = s.ask("Moat 주소 (예: moat.example.com)", "")
+			s.Opt.Domain = s.ask("Douve 주소 (예: douve.example.com)", "")
 		}
 		if s.Opt.Email == "" {
 			s.Opt.Email = s.ask("관리자 이메일 (첫 로그인 초대·인증서 알림)", "")
@@ -389,7 +389,7 @@ func (s *Installer) fetch(ctx context.Context) error {
 			want[strings.TrimPrefix(f[1], "*")] = f[0]
 		}
 	}
-	for _, name := range []string{"moat-hub-linux-" + s.arch, "moat-agent-linux-amd64", "moat-agent-linux-arm64", "VERSION"} {
+	for _, name := range []string{"douve-hub-linux-" + s.arch, "douve-agent-linux-amd64", "douve-agent-linux-arm64", "VERSION"} {
 		p, err := s.get(name)
 		if err != nil {
 			return err
@@ -430,17 +430,17 @@ func installFile(src, dst string, mode os.FileMode) error {
 }
 
 func (s *Installer) installHub(ctx context.Context) error {
-	hub := "/usr/local/bin/moat-hub"
-	if err := installFile(filepath.Join(s.tmp, "moat-hub-linux-"+s.arch), hub, 0o755); err != nil {
+	hub := "/usr/local/bin/douve-hub"
+	if err := installFile(filepath.Join(s.tmp, "douve-hub-linux-"+s.arch), hub, 0o755); err != nil {
 		return err
 	}
 	// 다른 서버 추가 때 내려줄 Agent
-	for _, f := range []string{"moat-agent-linux-amd64", "moat-agent-linux-arm64", "SHA256SUMS", "VERSION"} {
-		if err := installFile(filepath.Join(s.tmp, f), "/usr/local/share/moat/agent/"+f, 0o644); err != nil {
+	for _, f := range []string{"douve-agent-linux-amd64", "douve-agent-linux-arm64", "SHA256SUMS", "VERSION"} {
+		if err := installFile(filepath.Join(s.tmp, f), "/usr/local/share/douve/agent/"+f, 0o644); err != nil {
 			return err
 		}
 	}
-	if err := os.MkdirAll("/etc/moat", 0o755); err != nil {
+	if err := os.MkdirAll("/etc/douve", 0o755); err != nil {
 		return err
 	}
 	args := []string{"init", "--public-url", s.publicURL(), "--email", s.Opt.Email, "--listen", "127.0.0.1:8700",
@@ -462,27 +462,27 @@ func (s *Installer) installHub(ctx context.Context) error {
 		return err
 	}
 	// 기능 설정은 DB에 들어가므로 한 번 시작해서 DB를 만든 뒤 넣고 다시 시작
-	if _, err := run("systemctl", "enable", "--now", "moat-hub"); err != nil {
+	if _, err := run("systemctl", "enable", "--now", "douve-hub"); err != nil {
 		return err
 	}
 	if err := waitHTTP(ctx, "http://127.0.0.1:8700/healthz", 30*time.Second); err != nil {
-		return fmt.Errorf(i18n.T("Hub가 시작되지 않았습니다 (journalctl -u moat-hub): %w"), err)
+		return fmt.Errorf(i18n.T("Hub가 시작되지 않았습니다 (journalctl -u douve-hub): %w"), err)
 	}
 	if _, err := run(hub, "configure", "--features", s.featuresJSON()); err != nil {
 		return err
 	}
-	if _, err := run("systemctl", "restart", "moat-hub"); err != nil {
+	if _, err := run("systemctl", "restart", "douve-hub"); err != nil {
 		return err
 	}
 	if err := waitHTTP(ctx, "http://127.0.0.1:8700/healthz", 30*time.Second); err != nil {
 		return err
 	}
-	s.say("  moat-hub 실행 중 (127.0.0.1:8700)")
+	s.say("  douve-hub 실행 중 (127.0.0.1:8700)")
 	if s.Opt.Mode == "tailscale" {
 		if _, err := run("tailscale", "serve", "--bg", "--https=443", "http://127.0.0.1:8700"); err != nil {
 			return fmt.Errorf(i18n.T("tailscale serve 실패 — Tailscale 관리 화면에서 HTTPS 인증서를 켜야 할 수 있습니다\n  (https://login.tailscale.com/admin/dns → HTTPS Certificates)\n%w"), err)
 		}
-		s.say("  tailscale serve: %s → Moat", s.publicURL())
+		s.say("  tailscale serve: %s → Douve", s.publicURL())
 	}
 	return nil
 }
@@ -509,13 +509,13 @@ func waitHTTP(ctx context.Context, url string, d time.Duration) error {
 // ---------- Agent ----------
 
 func (s *Installer) installAgent(ctx context.Context) error {
-	agent := "/usr/local/bin/moat-agent"
-	if err := installFile(filepath.Join(s.tmp, "moat-agent-linux-"+s.arch), agent, 0o755); err != nil {
+	agent := "/usr/local/bin/douve-agent"
+	if err := installFile(filepath.Join(s.tmp, "douve-agent-linux-"+s.arch), agent, 0o755); err != nil {
 		return err
 	}
 	host, _ := os.Hostname()
 	name := strings.ToLower(strings.SplitN(host, ".", 2)[0])
-	outb, err := exec.Command("/usr/local/bin/moat-hub", "join-token", "--name", name).Output()
+	outb, err := exec.Command("/usr/local/bin/douve-hub", "join-token", "--name", name).Output()
 	if err != nil {
 		return fmt.Errorf(i18n.T("등록 토큰 생성 실패: %w"), err)
 	}
@@ -530,10 +530,10 @@ func (s *Installer) installAgent(ctx context.Context) error {
 	}
 	if s.Opt.Mode == "public" {
 		if s.Opt.TestPlain {
-			_ = os.MkdirAll("/etc/moat-agent", 0o700)
-			_ = os.WriteFile("/etc/moat-agent/edge.json", []byte(`{"http_addr":":80","serve_plain":true}`), 0o600)
+			_ = os.MkdirAll("/etc/douve-agent", 0o700)
+			_ = os.WriteFile("/etc/douve-agent/edge.json", []byte(`{"http_addr":":80","serve_plain":true}`), 0o600)
 		}
-		if _, err := run("/usr/local/bin/moat-hub", "node-set", "--name", name, "--edge", "on"); err != nil {
+		if _, err := run("/usr/local/bin/douve-hub", "node-set", "--name", name, "--edge", "on"); err != nil {
 			return err
 		}
 		// 집 공유기 뒤라면 80/443 포트포워딩을 공유기에 요청할지 (클라우드는 방화벽 안내만)
@@ -541,7 +541,7 @@ func (s *Installer) installAgent(ctx context.Context) error {
 		if s.cloud == "" && behindNAT() && !s.Opt.TestPlain {
 			s.say("\n  이 서버는 공유기 뒤(사설 IP)에 있습니다.")
 			if s.yesNo("공유기에서 80·443을 자동으로 열까요? (UPnP/NAT-PMP, 나중에 서버 화면에서 끌 수 있음)", true) {
-				if _, err := run("/usr/local/bin/moat-hub", "node-set", "--name", name, "--port-forward", "on"); err != nil {
+				if _, err := run("/usr/local/bin/douve-hub", "node-set", "--name", name, "--port-forward", "on"); err != nil {
 					return err
 				}
 				s.portForward = true
@@ -554,10 +554,10 @@ func (s *Installer) installAgent(ctx context.Context) error {
 	if _, err := run("systemctl", "daemon-reload"); err != nil {
 		return err
 	}
-	if _, err := run("systemctl", "enable", "--now", "moat-agent"); err != nil {
+	if _, err := run("systemctl", "enable", "--now", "douve-agent"); err != nil {
 		return err
 	}
-	s.say("  moat-agent 실행 중 (서버 이름: %s)", name)
+	s.say("  douve-agent 실행 중 (서버 이름: %s)", name)
 	return nil
 }
 
@@ -565,7 +565,7 @@ func (s *Installer) finish(ctx context.Context) error {
 	if s.Opt.Mode == "tailscale" {
 		s.say("\n완료! Tailscale에 연결된 기기에서 여세요:\n\n    %s\n", s.publicURL())
 		s.say("  Tailscale 사용자 %s로 바로 로그인됩니다 (비밀번호·패스키 없음).", s.Opt.Email)
-		s.say("  다른 서버 추가: Moat → 서버 → \"서버 추가\"")
+		s.say("  다른 서버 추가: Douve → 서버 → \"서버 추가\"")
 		return nil
 	}
 	url := s.publicURL() + "/healthz"
@@ -584,25 +584,25 @@ func (s *Installer) finish(ctx context.Context) error {
 		if g, ok := cloudGuide[s.cloud]; ok {
 			s.say("    %s: %s", g[0], i18n.T(g[1]))
 		} else if s.portForward {
-			s.say("    공유기 포트 자동 열기 결과는 Moat → 서버 → 이 서버의 '외부에서 접속'에서 볼 수 있습니다. 공유기가 지원하지 않으면 공유기 관리 화면에서 TCP 80·443을 이 서버로 포트포워딩하세요.")
+			s.say("    공유기 포트 자동 열기 결과는 Douve → 서버 → 이 서버의 '외부에서 접속'에서 볼 수 있습니다. 공유기가 지원하지 않으면 공유기 관리 화면에서 TCP 80·443을 이 서버로 포트포워딩하세요.")
 		}
 	} else {
 		s.say("  접속 확인 ✓")
 	}
-	outb, err := exec.Command("/usr/local/bin/moat-hub", "invite", "--email", s.Opt.Email).Output()
+	outb, err := exec.Command("/usr/local/bin/douve-hub", "invite", "--email", s.Opt.Email).Output()
 	if err != nil {
 		return fmt.Errorf(i18n.T("초대 링크 생성 실패: %w"), err)
 	}
 	out := string(outb)
 	s.say("\n완료! 아래 링크를 열어 이 브라우저(기기)에 패스키를 만들면 바로 시작합니다 (24시간 유효):\n\n    %s\n", strings.TrimSpace(out))
-	if codes, err := exec.Command("/usr/local/bin/moat-hub", "recovery-codes", "--email", s.Opt.Email).Output(); err == nil {
+	if codes, err := exec.Command("/usr/local/bin/douve-hub", "recovery-codes", "--email", s.Opt.Email).Output(); err == nil {
 		s.say("  비상용 복구 코드 (패스키 기기를 모두 잃었을 때 한 번씩 사용 — 지금 서버 밖에 적어 두세요):\n")
 		for _, c := range strings.Fields(string(codes)) {
 			s.say("    %s", c)
 		}
 		s.say("")
 	}
-	s.say("  다른 서버 추가: Moat → 서버 → \"서버 추가\"")
+	s.say("  다른 서버 추가: Douve → 서버 → \"서버 추가\"")
 	return nil
 }
 

@@ -2,7 +2,7 @@
 
 #include <algorithm>
 
-namespace moat {
+namespace douve {
 namespace {
 
 constexpr std::int64_t kRenotifySeconds = 6 * 3600;
@@ -83,7 +83,7 @@ std::vector<std::string> ingestSecurity(Database& db, const SecurityContext& ctx
     for (const auto& e : events) {
         auto c = classifySecurity(ctx.nodeId, e, ctx.adminUsers);
         const std::int64_t ts = e.ts > 0 && e.ts <= now + 300 ? e.ts : now;
-        // 출처: Moat 터미널 세션이면 그 사용자. 파일·계정 변경은 그 시각에 터미널을 쓰던 사용자.
+        // 출처: Douve 터미널 세션이면 그 사용자. 파일·계정 변경은 그 시각에 터미널을 쓰던 사용자.
         std::string via;
         if (!e.viaSid.empty() && ctx.terminalUser)
             via = ctx.terminalUser(e.viaSid);
@@ -93,7 +93,7 @@ std::vector<std::string> ingestSecurity(Database& db, const SecurityContext& ctx
 
         std::string status;
         if (!via.empty())
-            status = "auto"; // 내가 Moat 터미널에서 한 일
+            status = "auto"; // 내가 Douve 터미널에서 한 일
         else if (c.severity == "info")
             status = "info";
 
@@ -183,4 +183,4 @@ void purgeSecurityEvents(Database& db, std::int64_t before) {
     s.bind(1, before).run();
 }
 
-} // namespace moat
+} // namespace douve

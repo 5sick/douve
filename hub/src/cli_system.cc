@@ -14,23 +14,23 @@
 #include <iostream>
 #include <sstream>
 
-namespace moat {
+namespace douve {
 
 std::string hubUnitFile() {
     return R"unit([Unit]
-Description=Moat Hub (서버 관리 · 로그인 관문)
-Documentation=https://github.com/5sick/moat
+Description=Douve Hub (서버 관리 · 로그인 관문)
+Documentation=https://github.com/5sick/douve
 Wants=network-online.target
 After=network-online.target
 
 [Service]
 # 설정은 root 전용 파일을 systemd 자격증명으로만 읽는다
-LoadCredential=hub.json:/etc/moat/hub.json
-ExecStart=/usr/local/bin/moat-hub --config ${CREDENTIALS_DIRECTORY}/hub.json
+LoadCredential=hub.json:/etc/douve/hub.json
+ExecStart=/usr/local/bin/douve-hub --config ${CREDENTIALS_DIRECTORY}/hub.json
 Restart=on-failure
 RestartSec=3
 DynamicUser=yes
-StateDirectory=moat
+StateDirectory=douve
 StateDirectoryMode=0700
 UMask=0077
 NoNewPrivileges=yes
@@ -61,11 +61,11 @@ WantedBy=multi-user.target
 }
 
 int runInstallService(const std::vector<std::string>& args) {
-    std::string path = "/etc/systemd/system/moat-hub.service";
+    std::string path = "/etc/systemd/system/douve-hub.service";
     if (args.size() == 2 && args[0] == "--output")
         path = args[1];
     else if (!args.empty()) {
-        std::cerr << T("사용: moat-hub install-service [--output 파일]\n");
+        std::cerr << T("사용: douve-hub install-service [--output 파일]\n");
         return 2;
     }
     std::ofstream out(path, std::ios::trunc);
@@ -93,7 +93,7 @@ void matchOwner(const std::string& dbPath) {
 } // namespace
 
 int runConfigure(const std::vector<std::string>& args) {
-    std::string configPath = "/etc/moat/hub.json", features, expose;
+    std::string configPath = "/etc/douve/hub.json", features, expose;
     for (std::size_t i = 0; i + 1 < args.size(); i += 2) {
         if (args[i] == "--config")
             configPath = args[i + 1];
@@ -108,7 +108,7 @@ int runConfigure(const std::vector<std::string>& args) {
     }
     if (features.empty() && expose.empty()) {
         std::cerr << T(
-            "사용: moat-hub configure [--features JSON] [--expose on|off] [--config 파일]\n");
+            "사용: douve-hub configure [--features JSON] [--expose on|off] [--config 파일]\n");
         return 2;
     }
     std::string error;
@@ -150,4 +150,4 @@ int runConfigure(const std::vector<std::string>& args) {
     return 0;
 }
 
-} // namespace moat
+} // namespace douve

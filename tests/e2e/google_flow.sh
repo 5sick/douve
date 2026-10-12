@@ -1,9 +1,9 @@
 #!/bin/bash
-# Google 로그인 E2E: 가짜 Google 서버 + moat-hub를 띄우고 curl로 전체 흐름을 검증한다.
-# 사용: tests/e2e/google_flow.sh [moat-hub 경로]
+# Google 로그인 E2E: 가짜 Google 서버 + douve-hub를 띄우고 curl로 전체 흐름을 검증한다.
+# 사용: tests/e2e/google_flow.sh [douve-hub 경로]
 set -u
-export MOAT_LANG=ko # CLI 출력 언어 고정 (영어 확인은 따로)
-HUB=${1:-build/hub/moat-hub}
+export DOUVE_LANG=ko # CLI 출력 언어 고정 (영어 확인은 따로)
+HUB=${1:-build/hub/douve-hub}
 DIR=$(mktemp -d); trap 'kill $(jobs -p) 2>/dev/null; rm -rf "$DIR"' EXIT
 HERE=$(cd "$(dirname "$0")" && pwd)
 PASS=0; FAIL=0
@@ -38,9 +38,9 @@ final=$(login "/")
 code=$(curl -s -b "$DIR/jar" -o /dev/null -w '%{http_code}' localhost:18800/auth/verify)
 [ "$code" = 200 ] && ok "허용된 이메일 로그인 → 세션 유효" || bad "허용된 이메일 로그인 (verify=$code, final=$final)"
 case "$final" in *"/account?setup=passkey"*) ok "패스키 없으면 등록 화면으로 안내" ;; *) bad "등록 안내 리다이렉트 ($final)";; esac
-user=$(curl -s -b "$DIR/jar" -D - -o /dev/null localhost:18800/auth/verify | tr -d '\r' | sed -n 's/^x-moat-user: //Ip')
-[ "$user" = test@example.com ] && ok "X-Moat-User 헤더" || bad "X-Moat-User ($user)"
-grep -q "moat_session" "$DIR/jar" && ok "세션 쿠키 발급" || bad "세션 쿠키"
+user=$(curl -s -b "$DIR/jar" -D - -o /dev/null localhost:18800/auth/verify | tr -d '\r' | sed -n 's/^x-douve-user: //Ip')
+[ "$user" = test@example.com ] && ok "X-Douve-User 헤더" || bad "X-Douve-User ($user)"
+grep -q "douve_session" "$DIR/jar" && ok "세션 쿠키 발급" || bad "세션 쿠키"
 code=$(curl -s -b "$DIR/jar" -o /dev/null -w "%{http_code}" -X POST localhost:18800/auth/logout)
 [ "$code" = 403 ] && ok "Origin 없는 로그아웃 요청 거부(CSRF)" || bad "CSRF 검사 ($code)"
 curl -s -b "$DIR/jar" -c "$DIR/jar" -o /dev/null -X POST -H "Origin: http://localhost:18800" localhost:18800/auth/logout

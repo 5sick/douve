@@ -2,7 +2,7 @@
 
 #include "util/encoding.h"
 
-namespace moat {
+namespace douve {
 
 // 암호학적으로 안전한 난수 (OpenSSL RAND_bytes). 실패 시 예외.
 Bytes randomBytes(std::size_t n);
@@ -26,4 +26,4 @@ Bytes hmacSha256(std::string_view key, std::string_view message);
 // 타이밍 공격을 피하는 비교.
 bool constantTimeEquals(const Bytes& a, const Bytes& b);
 
-} // namespace moat
+} // namespace douve

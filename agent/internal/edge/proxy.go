@@ -7,7 +7,7 @@ import (
 	"crypto/tls"
 	"encoding/base64"
 	"fmt"
-	"github.com/5sick/moat/agent/internal/i18n"
+	"github.com/5sick/douve/agent/internal/i18n"
 	"html"
 	"log/slog"
 	"net"
@@ -19,10 +19,10 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/5sick/moat/agent/internal/tunnel"
+	"github.com/5sick/douve/agent/internal/tunnel"
 )
 
-const sessionCookie = "moat_session"
+const sessionCookie = "douve_session"
 
 type tlsKey struct{}
 
@@ -88,7 +88,7 @@ func (v *verifier) check(ctx context.Context, verifyURL, token string) (bool, st
 	var d verdict
 	switch resp.StatusCode {
 	case http.StatusOK:
-		d = verdict{ok: true, user: resp.Header.Get("X-Moat-User"), expires: now.Add(v.ttlOK)}
+		d = verdict{ok: true, user: resp.Header.Get("X-Douve-User"), expires: now.Add(v.ttlOK)}
 	case http.StatusUnauthorized:
 		d = verdict{ok: false, expires: now.Add(v.ttlBad)}
 	default:
@@ -290,7 +290,7 @@ func (h *Handler) proxy(route *Route) *httputil.ReverseProxy {
 	return p
 }
 
-// stripSession은 업스트림 서비스로 Moat 세션 쿠키가 넘어가지 않게 한다
+// stripSession은 업스트림 서비스로 Douve 세션 쿠키가 넘어가지 않게 한다
 // (서비스가 쿠키를 훔쳐 다른 서비스에 로그인하는 것 방지).
 func stripSession(r *http.Request) {
 	cookies := r.Cookies()
@@ -317,12 +317,12 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		route = t.lookup(host, r.URL.Path)
 	}
 	if route == nil {
-		errorPage(w, r, http.StatusNotFound, "알 수 없는 주소", "이 도메인은 Moat에 등록되어 있지 않습니다.")
+		errorPage(w, r, http.StatusNotFound, "알 수 없는 주소", "이 도메인은 Douve에 등록되어 있지 않습니다.")
 		return
 	}
 	// 클라이언트가 보낸 사용자 헤더는 절대 믿지 않는다. Tailscale 신원 헤더도 지운다
 	// (Hub가 Tailscale 모드면 127.0.0.1에서 온 이 헤더를 로그인으로 인정하는데, 입구도 127.0.0.1에서 Hub로 간다)
-	r.Header.Del("X-Moat-User")
+	r.Header.Del("X-Douve-User")
 	for _, h := range []string{"Tailscale-User-Login", "Tailscale-User-Name", "Tailscale-User-Profile-Pic", "Tailscale-Headers-Info"} {
 		r.Header.Del(h)
 	}
@@ -346,7 +346,7 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		// Hub 자신: 쿠키 그대로, Hub가 로그인을 직접 처리
 	case route.Auth == "public" || route.isPublicPath(r.URL.Path):
 		stripSession(r)
-	default: // moat
+	default: // douve
 		token := ""
 		if c, err := r.Cookie(sessionCookie); err == nil {
 			token = c.Value
@@ -357,7 +357,7 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			ok, user, err = h.verifier.check(r.Context(), t.VerifyURL, token)
 			if err != nil {
 				errorPage(w, r, http.StatusBadGateway, "로그인 서버에 연결할 수 없습니다",
-					"Moat Hub가 응답하지 않습니다. 잠시 후 다시 시도하세요.")
+					"Douve Hub가 응답하지 않습니다. 잠시 후 다시 시도하세요.")
 				return
 			}
 		}
@@ -366,7 +366,7 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		stripSession(r)
-		r.Header.Set("X-Moat-User", user)
+		r.Header.Set("X-Douve-User", user)
 	}
 	if r.TLS != nil {
 		r = r.WithContext(context.WithValue(r.Context(), tlsKey{}, true))
@@ -394,5 +394,5 @@ func errorPage(w http.ResponseWriter, r *http.Request, code int, title, msg stri
 		`<meta name="viewport" content="width=device-width,initial-scale=1"><title>` + html.EscapeString(title) +
 		`</title><body style="font-family:sans-serif;max-width:520px;margin:15vh auto;padding:0 16px">` +
 		`<h1 style="font-size:22px">` + html.EscapeString(title) + `</h1><p style="color:#666">` +
-		html.EscapeString(msg) + `</p><p style="color:#999;font-size:13px">Moat</p></body></html>`))
+		html.EscapeString(msg) + `</p><p style="color:#999;font-size:13px">Douve</p></body></html>`))
 }

@@ -6,7 +6,7 @@
 #include <fstream>
 #include <sstream>
 
-namespace moat {
+namespace douve {
 namespace {
 
 std::string lower(std::string s) {
@@ -178,4 +178,4 @@ std::optional<HubConfig> loadConfigFile(const std::string& path, std::string& er
     return cfg;
 }
 
-} // namespace moat
+} // namespace douve

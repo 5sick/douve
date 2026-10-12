@@ -1,7 +1,7 @@
 #include "cluster/apps.h"
 #include "testing.h"
 
-using namespace moat;
+using namespace douve;
 
 namespace {
 Json::Value J(const char* s) {
@@ -51,7 +51,7 @@ TEST(apps_discover_containers_and_processes) {
         {"address":"127.0.0.1","port":5432,"process":"postgres"},
         {"address":"127.0.0.1","port":3000,"process":"docker-proxy"},
         {"address":"0.0.0.0","port":5000,"process":"python3"},
-        {"address":"127.0.0.1","port":8700,"process":"moat-hub"}
+        {"address":"127.0.0.1","port":8700,"process":"douve-hub"}
       ]})");
     Service s;
     s.id = 7;
@@ -93,6 +93,6 @@ TEST(apps_discover_containers_and_processes) {
     CHECK(p && p->get("kind", "").asString() == "process");
     CHECK(find(apps, "sshd", 22) == nullptr);
     CHECK(find(apps, "postgres", 5432) == nullptr);
-    CHECK(find(apps, "moat-hub", 8700) == nullptr);
+    CHECK(find(apps, "douve-hub", 8700) == nullptr);
     CHECK(find(apps, "docker-proxy", 8096) == nullptr);
 }

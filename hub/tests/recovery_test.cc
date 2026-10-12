@@ -8,7 +8,7 @@
 #include <set>
 #include <unistd.h>
 
-using namespace moat;
+using namespace douve;
 namespace fs = std::filesystem;
 
 TEST(recovery_codes_one_time_use) {
@@ -53,12 +53,13 @@ TEST(recovery_codes_one_time_use) {
 }
 
 TEST(backup_roundtrip) {
-    const auto dir = fs::temp_directory_path() / ("moat-backup-test-" + std::to_string(::getpid()));
+    const auto dir =
+        fs::temp_directory_path() / ("douve-backup-test-" + std::to_string(::getpid()));
     fs::remove_all(dir);
     fs::create_directories(dir);
     const auto dbPath = (dir / "hub.db").string();
     const auto cfgPath = (dir / "hub.json").string();
-    std::ofstream(cfgPath) << R"({"public_url":"https://moat.example.com"})";
+    std::ofstream(cfgPath) << R"({"public_url":"https://douve.example.com"})";
     {
         Database db(dbPath);
         findOrCreateUser(db, "keep@x.com", 1);
@@ -69,7 +70,7 @@ TEST(backup_roundtrip) {
         std::string err;
         auto info = readBackupInfo(out, err);
         CHECK(info && info->version == "v1" && info->createdAt == 500);
-        CHECK(info && info->config.find("moat.example.com") != std::string::npos);
+        CHECK(info && info->config.find("douve.example.com") != std::string::npos);
         CHECK(!fs::exists(out + "-wal"));
         // 백업 뒤에 바뀐 내용은 복원하면 사라진다
         findOrCreateUser(db, "later@x.com", 2);
@@ -80,7 +81,7 @@ TEST(backup_roundtrip) {
         Database db(dbPath);
         CHECK(findUserByEmail(db, "keep@x.com").has_value());
         CHECK(!findUserByEmail(db, "later@x.com").has_value());
-        Statement q(db, "SELECT count(*) FROM sqlite_master WHERE name = 'moat_backup'");
+        Statement q(db, "SELECT count(*) FROM sqlite_master WHERE name = 'douve_backup'");
         CHECK(q.step() && q.int64(0) == 0);
     }
     std::string err;
@@ -99,6 +100,34 @@ TEST(backup_roundtrip) {
         for (auto& e : fs::directory_iterator(bdir))
             n += e.path().filename().string().rfind("auto-", 0) == 0;
         CHECK(n == 3);
+    }
+    fs::remove_all(dir);
+}
+
+TEST(backup_reads_old_moat_format) {
+    const auto dir = fs::temp_directory_path() / ("douve-oldbackup-" + std::to_string(::getpid()));
+    fs::remove_all(dir);
+    fs::create_directories(dir);
+    const auto old = (dir / "old.db").string();
+    {
+        Database b(old);
+        findOrCreateUser(b, "keep@x.com", 1);
+        b.exec("CREATE TABLE moat_backup (key TEXT PRIMARY KEY, value TEXT NOT NULL)");
+        b.exec("INSERT INTO moat_backup VALUES ('format','moat-backup-1'),('version','v0.1.0'),"
+               "('created_at','42'),('hub.json','{}')");
+        b.exec("PRAGMA journal_mode = DELETE");
+    }
+    std::string err;
+    auto info = readBackupInfo(old, err);
+    CHECK(info && info->version == "v0.1.0" && info->createdAt == 42);
+    const auto dbPath = (dir / "hub.db").string();
+    CHECK(restoreDatabase(old, dbPath, 7).empty());
+    {
+        Database db(dbPath);
+        CHECK(findUserByEmail(db, "keep@x.com").has_value());
+        Statement q(
+            db, "SELECT count(*) FROM sqlite_master WHERE name IN ('moat_backup','douve_backup')");
+        CHECK(q.step() && q.int64(0) == 0);
     }
     fs::remove_all(dir);
 }

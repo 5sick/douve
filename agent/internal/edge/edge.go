@@ -1,7 +1,7 @@
 // Package edge는 입구(edge) 역할을 맡은 노드의 공개 HTTPS 리버스 프록시다.
 //
 // Hub가 보내는 라우팅 표(도메인 → 업스트림 + 접근 정책)대로 요청을 넘기고,
-// "moat" 정책이면 Hub의 /auth/verify로 로그인 여부를 확인한다. 인증서는 Let's Encrypt(autocert)로
+// "douve" 정책이면 Hub의 /auth/verify로 로그인 여부를 확인한다. 인증서는 Let's Encrypt(autocert)로
 // 자동 발급하며, 발급 전·실패 시에는 설정한 기존 인증서 파일을 쓴다. 라우팅 표는 디스크에 저장해
 // Hub가 내려가 있어도 계속 서비스한다.
 package edge
@@ -20,7 +20,7 @@ import (
 type Route struct {
 	Host        string   `json:"host"`
 	Upstream    string   `json:"upstream"`
-	Auth        string   `json:"auth"` // moat | public | hub
+	Auth        string   `json:"auth"` // douve | public | hub
 	PublicPaths []string `json:"public_paths"`
 	// 경로 접두사 라우팅: 같은 도메인에서 가장 긴 접두사가 이긴다 ("" 또는 "/" = 전체)
 	PathPrefix  string `json:"path_prefix"`
@@ -106,7 +106,9 @@ func (t *Table) Validate() error {
 			return fmt.Errorf("%s: 잘못된 업스트림 설정", r.Host)
 		}
 		switch r.Auth {
-		case "moat", "public", "hub":
+		case "moat": // 이름을 바꾸기 전(Moat) Hub·저장된 표의 값 = 로그인 필요
+			t.Routes[i].Auth = "douve"
+		case "douve", "public", "hub":
 		default:
 			return fmt.Errorf("%s: 알 수 없는 정책 %q", r.Host, r.Auth)
 		}
@@ -214,7 +216,7 @@ func SaveTable(path string, t *Table) error {
 	return os.Rename(tmp, path)
 }
 
-// Config는 노드 로컬 설정(/etc/moat-agent/edge.json, 선택)이다. 없으면 기본값.
+// Config는 노드 로컬 설정(/etc/douve-agent/edge.json, 선택)이다. 없으면 기본값.
 type Config struct {
 	HTTPAddr  string `json:"http_addr"`  // 기본 ":80" (ACME HTTP-01 + https 리다이렉트)
 	HTTPSAddr string `json:"https_addr"` // 기본 ":443"

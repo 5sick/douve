@@ -12,12 +12,12 @@
 
 #include <drogon/drogon.h>
 
-namespace moat {
+namespace douve {
 
 using drogon::WebSocketConnectionPtr;
 
 std::string agentAuthMessage(const std::string& nonce, std::int64_t nodeId) {
-    return "moat-agent-auth:v1:" + nonce + ":" + std::to_string(nodeId);
+    return "douve-agent-auth:v1:" + nonce + ":" + std::to_string(nodeId);
 }
 
 namespace {
@@ -102,7 +102,7 @@ void AgentGateway::onAuth(const WebSocketConnectionPtr& conn, Ctx& ctx, const Js
             Json::Value u;
             u["type"] = "update";
             u["version"] = rel->version;
-            u["path"] = "/dl/moat-agent-linux-" + node->arch;
+            u["path"] = "/dl/douve-agent-linux-" + node->arch;
             u["sha256"] = it->second;
             sendJson(conn, u);
             LOG_INFO << "Agent 업데이트 지시: " << node->name << " " << agentVersion << " → "
@@ -156,7 +156,7 @@ void AgentGateway::dispatch(const WebSocketConnectionPtr& conn, Ctx& ctx, const 
         return hub_.ingestPortmap(ctx.nodeId, msg["status"]);
     if (kind == "expose_req") {
         Json::Value res = hub_.handleExpose(ctx.nodeId, msg);
-        // CLI 언어로 (moat-agent expose를 실행한 터미널의 LANG)
+        // CLI 언어로 (douve-agent expose를 실행한 터미널의 LANG)
         const std::string lang = msg.get("lang", "").asString();
         for (const char* k : {"error", "warning"})
             if (res.isMember(k))
@@ -245,4 +245,4 @@ void AgentGateway::disconnect(std::int64_t nodeId) {
     c->shutdown(drogon::CloseCode::kNormalClosure, "노드 삭제됨");
 }
 
-} // namespace moat
+} // namespace douve

@@ -14,7 +14,7 @@
 #include <algorithm>
 #include <ctime>
 
-namespace moat {
+namespace douve {
 
 using drogon::HttpRequestPtr;
 using drogon::HttpResponse;
@@ -247,7 +247,7 @@ void HubApp::registerRoutes() {
         [](const HttpRequestPtr&, Callback&& cb) {
             const auto* a = assets::find("i18n-en.json");
             auto r = HttpResponse::newHttpResponse();
-            r->setBody("window.MOAT_I18N_EN = " +
+            r->setBody("window.DOUVE_I18N_EN = " +
                        std::string(reinterpret_cast<const char*>(a->data), a->size) + ";\n");
             r->setContentTypeString("text/javascript; charset=utf-8");
             r->addHeader("X-Content-Type-Options", "nosniff");
@@ -280,7 +280,7 @@ void HubApp::registerRoutes() {
                         {drogon::Get});
 
     // nginx auth_request 대상. 본문 없이 상태 코드만 의미가 있다.
-    //   200: 로그인됨 (X-Moat-User 헤더에 이메일) / 401: 로그인 필요
+    //   200: 로그인됨 (X-Douve-User 헤더에 이메일) / 401: 로그인 필요
     app.registerHandler("/auth/verify",
                         [this](const HttpRequestPtr& req, Callback&& cb) {
                             auto s = currentSession(req, now());
@@ -290,7 +290,7 @@ void HubApp::registerRoutes() {
                                 r->setStatusCode(drogon::k401Unauthorized);
                             } else {
                                 r->setStatusCode(drogon::k200OK);
-                                r->addHeader("X-Moat-User", s->email);
+                                r->addHeader("X-Douve-User", s->email);
                             }
                             cb(r);
                         },
@@ -407,4 +407,4 @@ void HubApp::registerRoutes() {
                         {drogon::Post});
 }
 
-} // namespace moat
+} // namespace douve

@@ -8,7 +8,7 @@
 #include <string>
 #include <vector>
 
-namespace moat {
+namespace douve {
 
 inline constexpr int kRecoveryCodeCount = 10;
 
@@ -29,4 +29,4 @@ RecoveryStatus recoveryStatus(Database& db, std::int64_t userId);
 // 비교용 정규화 (소문자, 알파벳 밖 글자 제거)
 std::string normalizeRecoveryCode(const std::string& code);
 
-} // namespace moat
+} // namespace douve

@@ -7,7 +7,7 @@
 #include <optional>
 #include <string>
 
-namespace moat {
+namespace douve {
 
 struct Invite {
     std::string token; // 평문은 만들 때만
@@ -30,4 +30,4 @@ std::optional<std::string> getSetting(Database& db, const std::string& key);
 void putSetting(Database& db, const std::string& key, const std::string& value, std::int64_t now);
 void deleteSetting(Database& db, const std::string& key);
 
-} // namespace moat
+} // namespace douve

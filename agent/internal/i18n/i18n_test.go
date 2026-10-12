@@ -23,7 +23,7 @@ func TestDictionaryVerbs(t *testing.T) {
 }
 
 func TestLangAndIn(t *testing.T) {
-	t.Setenv("MOAT_LANG", "")
+	t.Setenv("DOUVE_LANG", "")
 	t.Setenv("LC_ALL", "")
 	t.Setenv("LC_MESSAGES", "")
 	t.Setenv("LANG", "ko_KR.UTF-8")
@@ -34,9 +34,9 @@ func TestLangAndIn(t *testing.T) {
 	if Lang() != "en" || T("취소했습니다") != "Cancelled" {
 		t.Fatal("en")
 	}
-	t.Setenv("MOAT_LANG", "ko")
+	t.Setenv("DOUVE_LANG", "ko")
 	if Lang() != "ko" {
-		t.Fatal("MOAT_LANG 우선")
+		t.Fatal("DOUVE_LANG 우선")
 	}
 	if In("en", "사전에 없는 말") != "사전에 없는 말" {
 		t.Fatal("없는 말은 원문")

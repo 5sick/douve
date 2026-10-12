@@ -1,9 +1,9 @@
 #!/bin/bash
 # 비상 출입구 E2E: 복구 코드(CLI·웹 생성, 일회용, 알림, 재인증, 허용 사용자만, 속도 제한) + 백업·복원.
-# 사용: tests/e2e/recovery_flow.sh [moat-hub 경로]
+# 사용: tests/e2e/recovery_flow.sh [douve-hub 경로]
 set -u
-export MOAT_LANG=ko # CLI 출력 언어 고정 (영어 확인은 따로)
-HUB=${1:-build/hub/moat-hub}
+export DOUVE_LANG=ko # CLI 출력 언어 고정 (영어 확인은 따로)
+HUB=${1:-build/hub/douve-hub}
 HP=18870; TP=18871; WP=18872
 BASE="http://localhost:$HP"
 DIR=$(mktemp -d); trap 'kill $(jobs -p) 2>/dev/null; rm -rf "$DIR"' EXIT
@@ -59,13 +59,13 @@ for tok, re in (("rec-fresh-session-0123456789abcdef", now), ("rec-stale-session
 db.commit()
 PY
 F=rec-fresh-session-0123456789abcdef; S=rec-stale-session-0123456789abcdef
-post() { curl -s -X POST -H "Cookie: moat_session=$1" -H "Origin: $BASE" -H 'Content-Type: application/json' -d "$3" "$BASE$2"; }
+post() { curl -s -X POST -H "Cookie: douve_session=$1" -H "Origin: $BASE" -H 'Content-Type: application/json' -d "$3" "$BASE$2"; }
 # 복구 로그인: 응답 본문 + 받은 세션 쿠키
 recover() {
     curl -s -D "$DIR/h" -o "$DIR/b" -w '%{http_code}' -X POST -H "Origin: ${2:-$BASE}" -H 'Content-Type: application/json' \
         -d "{\"code\":\"$1\"}" "$BASE/auth/recovery"
 }
-cookie() { grep -i '^set-cookie: moat_session=' "$DIR/h" | sed 's/^[^=]*=\([^;]*\).*/\1/'; }
+cookie() { grep -i '^set-cookie: douve_session=' "$DIR/h" | sed 's/^[^=]*=\([^;]*\).*/\1/'; }
 
 echo "[recovery_flow]"
 "$HUB" recovery-codes --email ME@example.com --config "$DIR/hub.json" >"$DIR/codes" 2>/dev/null
@@ -81,13 +81,13 @@ code=$(recover "$(tr a-z A-Z <<<"${C1//-/ }")")
 SESS=$(cookie)
 [ "$code" = 200 ] && [ -n "$SESS" ] && ok "복구 코드로 로그인 (대문자·공백 입력)" || bad "복구 로그인 ($code $(cat "$DIR/b"))"
 grep -q '"remaining":9' "$DIR/b" && ok "남은 코드 수" || bad "남은 수 ($(cat "$DIR/b"))"
-curl -s -H "Cookie: moat_session=$SESS" "$BASE/api/me" | grep -q 'me@example.com' && ok "복구 세션으로 접속" || bad "복구 세션"
-curl -s -H "Cookie: moat_session=$SESS" "$BASE/api/sessions" | grep -q '"auth_method":"recovery"' && ok "세션 방식 = 복구 코드" || bad "세션 방식"
+curl -s -H "Cookie: douve_session=$SESS" "$BASE/api/me" | grep -q 'me@example.com' && ok "복구 세션으로 접속" || bad "복구 세션"
+curl -s -H "Cookie: douve_session=$SESS" "$BASE/api/sessions" | grep -q '"auth_method":"recovery"' && ok "세션 방식 = 복구 코드" || bad "세션 방식"
 [ "$(recover "$C1")" = 401 ] && ok "같은 코드 재사용 거부" || bad "재사용"
 for _ in $(seq 30); do grep -q "복구 코드로 로그인" "$DIR/tg.log" 2>/dev/null && break; sleep 0.1; done
 grep -q "복구 코드로 로그인: me@example.com" "$DIR/tg.log" && ok "복구 로그인 알림" || bad "알림 ($(cat "$DIR/tg.log" 2>/dev/null))"
 for _ in $(seq 30); do grep -q "복구 코드로 로그인" "$DIR/hook.log" 2>/dev/null && break; sleep 0.1; done
-grep -q '"source":"moat".*복구 코드로 로그인: me@example.com' "$DIR/hook.log" && ok "같은 알림이 웹훅 채널로도" || bad "채널 알림 ($(cat "$DIR/hook.log" 2>/dev/null))"
+grep -q '"source":"douve".*복구 코드로 로그인: me@example.com' "$DIR/hook.log" && ok "같은 알림이 웹훅 채널로도" || bad "채널 알림 ($(cat "$DIR/hook.log" 2>/dev/null))"
 sqlite3 "$DIR/hub.db" "SELECT group_concat(event) FROM audit_log" | grep -q 'recovery_login' && ok "감사 로그" || bad "감사 로그"
 
 # 복구 세션은 바로 재인증된 상태 → 새 패스키 등록·코드 재발급 가능
@@ -98,7 +98,7 @@ NEW=$(echo "$out" | python3 -c 'import json,sys; print(json.load(sys.stdin)["cod
 [ "$(recover "$C2")" = 401 ] && ok "새로 만들면 이전 코드 무효" || bad "이전 코드 무효"
 out=$(post $S /api/account/recovery/generate '{}')
 case "$out" in *reauth_required*) ok "웹 생성은 패스키 재확인 필요" ;; *) bad "재확인 ($out)";; esac
-curl -s -H "Cookie: moat_session=$F" "$BASE/api/account/recovery" | grep -q '"remaining":10' && ok "상태 API" || bad "상태 API"
+curl -s -H "Cookie: douve_session=$F" "$BASE/api/account/recovery" | grep -q '"remaining":10' && ok "상태 API" || bad "상태 API"
 
 # 허용되지 않은 사용자(gone)의 코드는 로그인 불가
 "$HUB" recovery-codes --email gone@example.com --config "$DIR/hub.json" >"$DIR/gone" 2>/dev/null
@@ -106,13 +106,13 @@ curl -s -H "Cookie: moat_session=$F" "$BASE/api/account/recovery" | grep -q '"re
 
 # 백업 → 변경 → 복원
 "$HUB" backup --output "$DIR/b1.db" --config "$DIR/hub.json" >/dev/null 2>&1 && [ -s "$DIR/b1.db" ] \
-    && ok "moat-hub backup (실행 중)" || bad "backup"
+    && ok "douve-hub backup (실행 중)" || bad "backup"
 [ "$(stat -c %a "$DIR/b1.db")" = 600 ] && ok "백업 파일 권한 600" || bad "권한 $(stat -c %a "$DIR/b1.db")"
 "$HUB" backup --output "$DIR/b1.db" --config "$DIR/hub.json" >/dev/null 2>&1 && bad "기존 파일 덮어씀" || ok "기존 백업 덮어쓰지 않음"
 kill $HUB_PID; wait $HUB_PID 2>/dev/null
 sqlite3 "$DIR/hub.db" "INSERT INTO users (email, created_at) VALUES ('later@example.com', 1)"
 cp "$DIR/hub.json" "$DIR/hub.json.orig"; echo '{}' >"$DIR/hub.json"
-"$HUB" restore "$DIR/b1.db" --config "$DIR/hub.json" --force >"$DIR/restore.log" 2>&1 && ok "moat-hub restore" || bad "restore ($(cat "$DIR/restore.log"))"
+"$HUB" restore "$DIR/b1.db" --config "$DIR/hub.json" --force >"$DIR/restore.log" 2>&1 && ok "douve-hub restore" || bad "restore ($(cat "$DIR/restore.log"))"
 cmp -s "$DIR/hub.json" "$DIR/hub.json.orig" && ok "설정 파일도 복원" || bad "설정 복원 ($(cat "$DIR/hub.json"))"
 ls "$DIR"/hub.db.before-restore-* >/dev/null 2>&1 && ok "기존 DB 보존" || bad "기존 DB 보존"
 start_hub
@@ -120,17 +120,17 @@ start_hub
 [ "$(recover "$NEW")" = 200 ] && ok "복원 뒤에도 복구 코드 사용" || bad "복원 후 코드"
 "$HUB" restore "$DIR/hub.json" --config "$DIR/hub.json" --force >/dev/null 2>&1 && bad "백업 아닌 파일 복원" || ok "백업이 아닌 파일 거부"
 
-# 같은 기기(moat_device 쿠키)에서 다시 로그인하면 그 기기의 이전 세션은 정리된다
+# 같은 기기(douve_device 쿠키)에서 다시 로그인하면 그 기기의 이전 세션은 정리된다
 "$HUB" recovery-codes --email me@example.com --config "$DIR/hub.json" >"$DIR/codes2" 2>/dev/null
 dev_login() {
     curl -s -D "$DIR/h" -o /dev/null -w '%{http_code}' -X POST -H "Origin: $BASE" -H 'Content-Type: application/json' \
-        ${2:+-H "Cookie: moat_device=$2"} -d "{\"code\":\"$1\"}" "$BASE/auth/recovery"
+        ${2:+-H "Cookie: douve_device=$2"} -d "{\"code\":\"$1\"}" "$BASE/auth/recovery"
 }
 nsess() { sqlite3 "$DIR/hub.db" "SELECT count(*) FROM sessions WHERE user_id = 1"; }
 dev_login "$(sed -n 1p "$DIR/codes2")" >/dev/null
-DEV=$(grep -i '^set-cookie: moat_device=' "$DIR/h" | sed 's/^[^=]*=\([^;]*\).*/\1/')
-grep -i '^set-cookie: moat_device=' "$DIR/h" | grep -qi 'httponly' && [ ${#DEV} -ge 22 ] && ok "기기 쿠키 발급 (HttpOnly)" || bad "기기 쿠키 ($(grep -i set-cookie "$DIR/h"))"
-grep -i '^set-cookie: moat_device=' "$DIR/h" | grep -qi 'domain=' && bad "기기 쿠키가 하위 도메인까지 전송됨" || ok "기기 쿠키는 Hub 주소에만"
+DEV=$(grep -i '^set-cookie: douve_device=' "$DIR/h" | sed 's/^[^=]*=\([^;]*\).*/\1/')
+grep -i '^set-cookie: douve_device=' "$DIR/h" | grep -qi 'httponly' && [ ${#DEV} -ge 22 ] && ok "기기 쿠키 발급 (HttpOnly)" || bad "기기 쿠키 ($(grep -i set-cookie "$DIR/h"))"
+grep -i '^set-cookie: douve_device=' "$DIR/h" | grep -qi 'domain=' && bad "기기 쿠키가 하위 도메인까지 전송됨" || ok "기기 쿠키는 Hub 주소에만"
 n1=$(nsess)
 dev_login "$(sed -n 2p "$DIR/codes2")" "$DEV" >/dev/null
 n2=$(nsess)

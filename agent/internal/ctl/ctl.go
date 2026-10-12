@@ -1,4 +1,4 @@
-// Package ctl은 같은 서버의 root가 실행한 `moat-agent expose` 같은 명령을 Agent 데몬에 전달하는
+// Package ctl은 같은 서버의 root가 실행한 `douve-agent expose` 같은 명령을 Agent 데몬에 전달하는
 // 유닉스 소켓이다 (상태 디렉터리, 권한 600 — root만).
 //
 //	CLI ──(JSON 한 줄)──▶ 데몬 ──WebSocket──▶ Hub ──▶ 응답
@@ -9,7 +9,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"github.com/5sick/moat/agent/internal/i18n"
+	"github.com/5sick/douve/agent/internal/i18n"
 	"net"
 	"os"
 	"path/filepath"
@@ -23,7 +23,7 @@ type Request struct {
 	Name string `json:"name,omitempty"`
 	Host string `json:"host,omitempty"`
 	Path string `json:"path,omitempty"`
-	Auth string `json:"auth,omitempty"` // moat | public
+	Auth string `json:"auth,omitempty"` // douve | public
 	Lang string `json:"lang,omitempty"` // CLI 언어 (Hub가 오류 문구를 이 언어로)
 }
 
@@ -94,7 +94,7 @@ func Call(stateDir string, req Request) (Response, error) {
 		if errors.Is(err, os.ErrPermission) {
 			return Response{}, errors.New(i18n.T("root 권한이 필요합니다 (sudo로 실행하세요)"))
 		}
-		return Response{}, errors.New(i18n.T("moat-agent 서비스에 연결할 수 없습니다 (systemctl status moat-agent)"))
+		return Response{}, errors.New(i18n.T("douve-agent 서비스에 연결할 수 없습니다 (systemctl status douve-agent)"))
 	}
 	defer c.Close()
 	_ = c.SetDeadline(time.Now().Add(30 * time.Second))

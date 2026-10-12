@@ -10,7 +10,7 @@
 
 #include <filesystem>
 
-namespace moat {
+namespace douve {
 
 using drogon::HttpRequestPtr;
 using drogon::HttpResponse;
@@ -244,4 +244,4 @@ void HubApp::registerHomeRoutes() {
         {drogon::Get});
 }
 
-} // namespace moat
+} // namespace douve

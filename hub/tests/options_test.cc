@@ -1,7 +1,7 @@
 #include "options.h"
 #include "testing.h"
 
-using moat::parseOptions;
+using douve::parseOptions;
 
 TEST(options_defaults) {
     std::string err;
@@ -32,6 +32,6 @@ TEST(options_flags) {
     std::string err;
     auto v = parseOptions({"--version"}, err);
     CHECK(v && v->showVersion);
-    auto c = parseOptions({"--config", "/etc/moat/hub.json"}, err);
-    CHECK(c && c->configPath == "/etc/moat/hub.json");
+    auto c = parseOptions({"--config", "/etc/douve/hub.json"}, err);
+    CHECK(c && c->configPath == "/etc/douve/hub.json");
 }

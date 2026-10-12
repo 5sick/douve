@@ -8,7 +8,7 @@
 #include <cstdlib>
 #include <sstream>
 
-namespace moat {
+namespace douve {
 namespace {
 
 Node readNode(Statement& s) {
@@ -286,4 +286,4 @@ void resolveAlert(Database& db, std::int64_t id, std::int64_t now) {
     s.bind(1, now).bind(2, id).run();
 }
 
-} // namespace moat
+} // namespace douve

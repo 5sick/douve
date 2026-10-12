@@ -347,7 +347,7 @@ func PublicListeners(proc string) []string {
 	var out []string
 	for _, p := range listeningPorts(proc) {
 		// 루프백과 Agent 자신(입구 80/443 등 의도한 포트)은 제외
-		if strings.HasPrefix(p.Address, "127.") || p.Address == "::1" || p.Process == "moat-agent" {
+		if strings.HasPrefix(p.Address, "127.") || p.Address == "::1" || p.Process == "douve-agent" {
 			continue
 		}
 		k := strconv.Itoa(p.Port) + " " + p.Process

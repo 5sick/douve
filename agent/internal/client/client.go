@@ -22,18 +22,18 @@ import (
 
 	"github.com/coder/websocket"
 
-	"github.com/5sick/moat/agent/internal/collect"
-	"github.com/5sick/moat/agent/internal/config"
-	"github.com/5sick/moat/agent/internal/features"
-	"github.com/5sick/moat/agent/internal/update"
-	"github.com/5sick/moat/agent/internal/version"
+	"github.com/5sick/douve/agent/internal/collect"
+	"github.com/5sick/douve/agent/internal/config"
+	"github.com/5sick/douve/agent/internal/features"
+	"github.com/5sick/douve/agent/internal/update"
+	"github.com/5sick/douve/agent/internal/version"
 )
 
 var httpClient = &http.Client{Timeout: 30 * time.Second}
 
 // AuthMessage는 Hub의 agentAuthMessage와 같아야 한다.
 func AuthMessage(nonce string, nodeID int64) string {
-	return "moat-agent-auth:v1:" + nonce + ":" + strconv.FormatInt(nodeID, 10)
+	return "douve-agent-auth:v1:" + nonce + ":" + strconv.FormatInt(nodeID, 10)
 }
 
 var b64 = base64.RawURLEncoding

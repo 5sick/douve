@@ -1,4 +1,4 @@
-/* Moat 웹 UI. 외부 폰트·라이브러리 없이 (CSP 'self'). */
+/* Douve 웹 UI. 외부 폰트·라이브러리 없이 (CSP 'self'). */
 :root {
   --bg: #f7f7f8; --surface: #ffffff; --surface-2: #f2f3f5; --text: #17181c; --muted: #6b7180; --faint: #9aa0ac;
   --line: #e6e7eb; --line-strong: #d7d9de;

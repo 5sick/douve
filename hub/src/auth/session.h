@@ -8,11 +8,11 @@
 #include <string>
 #include <vector>
 
-namespace moat {
+namespace douve {
 
-inline constexpr const char* kSessionCookie = "moat_session";
+inline constexpr const char* kSessionCookie = "douve_session";
 // 기기(브라우저) 구분용 쿠키. 로그인 정보가 아니며 Hub 주소에만 보낸다 (Domain 없음).
-inline constexpr const char* kDeviceCookie = "moat_device";
+inline constexpr const char* kDeviceCookie = "douve_device";
 
 struct SessionInfo {
     std::int64_t userId = 0;
@@ -62,4 +62,4 @@ class SessionManager {
 // Cookie 헤더에서 이름에 해당하는 값을 찾는다.
 std::optional<std::string> cookieValue(const std::string& cookieHeader, const std::string& name);
 
-} // namespace moat
+} // namespace douve

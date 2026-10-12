@@ -5,7 +5,7 @@
 #include <fstream>
 #include <string>
 
-namespace moat {
+namespace douve {
 
 // 바이트 조각을 UTF-8 경계에서 자른다. 끝의 불완전한 문자는 carry에 남겨 다음 조각 앞에 붙인다.
 std::string takeCompleteUtf8(std::string& carry, const std::string& chunk);
@@ -32,4 +32,4 @@ class Recorder {
     bool truncated_ = false;
 };
 
-} // namespace moat
+} // namespace douve

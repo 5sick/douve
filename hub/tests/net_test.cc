@@ -1,7 +1,7 @@
 #include "net/https_client.h"
 #include "testing.h"
 
-using namespace moat;
+using namespace douve;
 
 TEST(https_client_has_tls) {
     // 회귀 방지: Ubuntu의 Drogon HttpClient는 TLS 없이 빌드되어 https를 평문으로 보냈다.

@@ -9,7 +9,7 @@
 #include <memory>
 #include <sstream>
 
-namespace moat {
+namespace douve {
 namespace {
 
 std::optional<Json::Value> parseJson(const std::string& s) {
@@ -192,4 +192,4 @@ std::optional<GoogleIdentity> checkGoogleClaims(const Json::Value& c, const IdTo
     return GoogleIdentity{email, c.get("sub", "").asString()};
 }
 
-} // namespace moat
+} // namespace douve

@@ -1,6 +1,6 @@
 {
-  "name": "Moat",
-  "short_name": "Moat",
+  "name": "Douve",
+  "short_name": "Douve",
   "description": "작은 서버들을 위한 보안 현관",
   "start_url": "/",
   "scope": "/",

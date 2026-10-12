@@ -13,7 +13,7 @@
 #include <filesystem>
 #include <sstream>
 
-namespace moat {
+namespace douve {
 
 using drogon::WebSocketConnectionPtr;
 
@@ -145,7 +145,7 @@ void TerminalGateway::handleNewConnection(const drogon::HttpRequestPtr& req,
     open["cols"] = cols;
     open["rows"] = rows;
     if (!hub_.agents().send(s->nodeId, open))
-        return finish(s, -1, "서버가 Moat에 접속해 있지 않습니다");
+        return finish(s, -1, "서버가 Douve에 접속해 있지 않습니다");
     audit(hub_.db(), s->userId, "terminal_opened", s->ip,
           s->nodeName + " " + s->user + " " + s->sid, t);
 
@@ -307,4 +307,4 @@ void TerminalGateway::purgeRecordings(std::int64_t olderThanUnix) {
     }
 }
 
-} // namespace moat
+} // namespace douve

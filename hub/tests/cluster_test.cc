@@ -2,7 +2,7 @@
 #include "cluster/live.h"
 #include "testing.h"
 
-using namespace moat;
+using namespace douve;
 
 namespace {
 

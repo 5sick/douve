@@ -9,7 +9,7 @@ const bad = (m) => { console.log(`  FAIL ${m}`); failed++; };
 const browser = await chromium.launch();
 try {
   const ctx = await browser.newContext({ locale: 'ko-KR', viewport: { width: 1100, height: 700 } });
-  await ctx.addCookies([{ name: 'moat_session', value: SESSION, domain: 'localhost', path: '/' }]);
+  await ctx.addCookies([{ name: 'douve_session', value: SESSION, domain: 'localhost', path: '/' }]);
   const page = await ctx.newPage();
   const errs = [];
   page.on('pageerror', (e) => errs.push(String(e)));
@@ -19,9 +19,9 @@ try {
   await page.waitForFunction(() => document.getElementById('term-status').textContent.includes('연결됨'), null, { timeout: 10000 })
     .then(() => ok('터미널 연결'), () => bad(`연결 (${errs.join(' | ')})`));
   await page.locator('.xterm').click();
-  await page.keyboard.type('echo moat-$((40+2)); whoami\n');
+  await page.keyboard.type('echo douve-$((40+2)); whoami\n');
   const rows = () => page.locator('.xterm-rows').innerText();
-  await page.waitForFunction(() => document.querySelector('.xterm-rows').innerText.includes('moat-42'), null, { timeout: 5000 })
+  await page.waitForFunction(() => document.querySelector('.xterm-rows').innerText.includes('douve-42'), null, { timeout: 5000 })
     .then(() => ok('명령 실행·출력'), async () => bad(`출력 (${await rows()})`));
   (await rows()).includes(ME) ? ok(`계정 ${ME}`) : bad('whoami');
   await page.keyboard.type('stty size\n');
@@ -43,7 +43,7 @@ try {
   name ? ok('녹화 목록') : bad('녹화 목록');
   const replay = await ctx.newPage();
   await replay.goto(`${BASE}/terminal?replay=${encodeURIComponent(name)}`);
-  await replay.waitForFunction(() => document.querySelector('.xterm-rows')?.innerText.includes('moat-42'), null, { timeout: 15000 })
+  await replay.waitForFunction(() => document.querySelector('.xterm-rows')?.innerText.includes('douve-42'), null, { timeout: 15000 })
     .then(() => ok('녹화 재생'), () => bad('녹화 재생'));
 } finally {
   await browser.close();

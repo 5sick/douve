@@ -5,7 +5,7 @@
 
 #include <string>
 
-namespace moat::i18n {
+namespace douve::i18n {
 
 // lang이 "en"이 아니면 그대로 돌려준다.
 std::string translate(const std::string& text, const std::string& lang);
@@ -15,4 +15,4 @@ void loadDictionary(const std::string& json);
 // 내장 사전으로 되돌린다 (시험용)
 void resetDictionary();
 
-} // namespace moat::i18n
+} // namespace douve::i18n

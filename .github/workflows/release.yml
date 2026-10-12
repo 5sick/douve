@@ -21,14 +21,14 @@ jobs:
     runs-on: ${{ matrix.runner }}
     steps:
       - uses: actions/checkout@v4
-      - name: 정적 moat-hub 빌드 (Alpine/musl)
+      - name: 정적 douve-hub 빌드 (Alpine/musl)
         run: docker build -f packaging/hub-static/Dockerfile --build-arg VERSION=${GITHUB_REF_NAME} -o type=local,dest=out .
-      - run: file out/moat-hub-linux-${{ matrix.arch }} && out/moat-hub-linux-${{ matrix.arch }} --version
+      - run: file out/douve-hub-linux-${{ matrix.arch }} && out/douve-hub-linux-${{ matrix.arch }} --version
       - uses: actions/upload-artifact@v4
         with:
           name: hub-${{ matrix.arch }}
           path: |
-            out/moat-hub-linux-${{ matrix.arch }}
+            out/douve-hub-linux-${{ matrix.arch }}
             out/THIRD_PARTY_LICENSES-hub.txt
 
   agent:
@@ -57,16 +57,16 @@ jobs:
       - name: 산출물 정리·체크섬
         run: |
           mkdir rel
-          cp art/hub-amd64/moat-hub-linux-amd64 art/hub-arm64/moat-hub-linux-arm64 rel/
+          cp art/hub-amd64/douve-hub-linux-amd64 art/hub-arm64/douve-hub-linux-arm64 rel/
           cp art/hub-amd64/THIRD_PARTY_LICENSES-hub.txt rel/  # 두 아키텍처가 같은 내용
-          cp art/agent/moat-agent-linux-* art/agent/VERSION art/agent/THIRD_PARTY_LICENSES-agent.txt rel/
+          cp art/agent/douve-agent-linux-* art/agent/VERSION art/agent/THIRD_PARTY_LICENSES-agent.txt rel/
           cp LICENSE rel/LICENSE.txt
           cp deploy/install.sh rel/install.sh 2>/dev/null || true
-          chmod +x rel/moat-*
-          cd rel && sha256sum moat-* > SHA256SUMS && cat SHA256SUMS
+          chmod +x rel/douve-*
+          cd rel && sha256sum douve-* > SHA256SUMS && cat SHA256SUMS
       - name: GitHub Release
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           tag="${GITHUB_REF_NAME}"
-          gh release create "$tag" rel/* --title "Moat $tag" --generate-notes || gh release upload "$tag" rel/* --clobber
+          gh release create "$tag" rel/* --title "Douve $tag" --generate-notes || gh release upload "$tag" rel/* --clobber

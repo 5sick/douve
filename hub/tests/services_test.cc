@@ -2,10 +2,10 @@
 #include "store/services.h"
 #include "testing.h"
 
-using namespace moat;
+using namespace douve;
 
 namespace {
-Service svc(std::string host, std::string upstream, std::string auth = "moat") {
+Service svc(std::string host, std::string upstream, std::string auth = "douve") {
     Service s;
     s.name = "Kuma";
     s.host = std::move(host);
@@ -18,21 +18,21 @@ Service svc(std::string host, std::string upstream, std::string auth = "moat") {
 TEST(service_validation_normalizes) {
     auto s = svc("Kuma.Example.COM.", "10.200.0.3:03001");
     s.publicPaths = {"/api/push/"};
-    CHECK_EQ(validateService(s, "moat.example.com"), "");
+    CHECK_EQ(validateService(s, "douve.example.com"), "");
     CHECK_EQ(s.host, "kuma.example.com");
     CHECK_EQ(s.upstream, "10.200.0.3:3001");
     CHECK_EQ(s.name, "kuma");
     auto p = svc("a.example.com", "localhost:80", "public");
     p.publicPaths = {"/x"};
-    CHECK_EQ(validateService(p, "moat.example.com"), "");
+    CHECK_EQ(validateService(p, "douve.example.com"), "");
     CHECK(p.publicPaths.empty()); // 공개면 예외 경로 의미 없음
 }
 
 TEST(service_validation_rejects) {
-    const std::string hub = "moat.example.com";
+    const std::string hub = "douve.example.com";
     auto bad = [&](Service s) { return !validateService(s, hub).empty(); };
-    CHECK(bad(svc("moat.example.com", "10.0.0.1:80"))); // Hub 도메인 탈취
-    CHECK(bad(svc("localhost", "10.0.0.1:80")));        // 라벨 1개
+    CHECK(bad(svc("douve.example.com", "10.0.0.1:80"))); // Hub 도메인 탈취
+    CHECK(bad(svc("localhost", "10.0.0.1:80")));         // 라벨 1개
     CHECK(bad(svc("a_b.example.com", "10.0.0.1:80")));
     CHECK(bad(svc("-a.example.com", "10.0.0.1:80")));
     CHECK(bad(svc("a.example.com", "http://10.0.0.1:80")));
@@ -60,7 +60,7 @@ TEST(service_crud_and_uniqueness) {
     Database db(":memory:");
     std::string err;
     auto a = svc("kuma.example.com", "10.200.0.3:3001");
-    validateService(a, "moat.example.com");
+    validateService(a, "douve.example.com");
     auto created = createService(db, a, 100, err);
     CHECK(created.has_value());
     auto dup = a;
@@ -68,7 +68,7 @@ TEST(service_crud_and_uniqueness) {
     CHECK(!createService(db, dup, 101, err).has_value()); // 도메인 중복
     auto b = svc("home.example.com", "10.200.0.2:3000");
     b.name = "home";
-    validateService(b, "moat.example.com");
+    validateService(b, "douve.example.com");
     auto cb = createService(db, b, 102, err);
     CHECK(cb.has_value());
     cb->host = "kuma.example.com";
@@ -99,7 +99,7 @@ TEST(mesh_address_prefers_wireguard) {
 }
 
 TEST(service_route_options_validation) {
-    const std::string hub = "moat.example.com";
+    const std::string hub = "douve.example.com";
     auto s = svc("app.example.com", "10.0.0.1:80");
     s.pathPrefix = "/api/";
     s.stripPrefix = true;
@@ -116,7 +116,7 @@ TEST(service_route_options_validation) {
     }
     auto r = svc("example.com", "");
     r.kind = "redirect";
-    r.redirectTo = "https://moat.example.com/";
+    r.redirectTo = "https://douve.example.com/";
     CHECK_EQ(validateService(r, hub), "");
     CHECK_EQ(r.auth, "public");
     r.redirectTo = "javascript:alert(1)";
@@ -141,17 +141,17 @@ TEST(service_same_host_different_paths) {
     std::string err;
     auto a = svc("app.example.com", "10.0.0.1:80");
     a.name = "web";
-    validateService(a, "moat.example.com");
+    validateService(a, "douve.example.com");
     CHECK(createService(db, a, 1, err).has_value());
     auto b = svc("app.example.com", "10.0.0.2:8080");
     b.name = "api";
     b.pathPrefix = "/api";
-    validateService(b, "moat.example.com");
+    validateService(b, "douve.example.com");
     CHECK(createService(db, b, 1, err).has_value()); // 같은 도메인, 다른 경로
     auto c = svc("app.example.com", "10.0.0.3:1");
     c.name = "dup";
     c.pathPrefix = "/api";
-    validateService(c, "moat.example.com");
+    validateService(c, "douve.example.com");
     CHECK(!createService(db, c, 1, err).has_value()); // 같은 도메인·경로
     auto got = listServices(db);
     CHECK_EQ(got.size(), std::size_t{2});
@@ -164,7 +164,7 @@ TEST(service_all_fields_round_trip) {
     Service s = svc("app.example.com", "10.0.0.9:8443");
     s.name = "full";
     s.nodeId = 7;
-    s.auth = "moat";
+    s.auth = "douve";
     s.publicPaths = {"/hook/"};
     s.pathPrefix = "/api";
     s.stripPrefix = true;
@@ -177,7 +177,7 @@ TEST(service_all_fields_round_trip) {
     s.onHome = false;
     s.position = 3;
     s.origin = "node";
-    CHECK_EQ(validateService(s, "moat.example.com"), "");
+    CHECK_EQ(validateService(s, "douve.example.com"), "");
     std::string err;
     auto c = createService(db, s, 100, err);
     CHECK(c.has_value());
@@ -208,7 +208,7 @@ TEST(service_all_fields_round_trip) {
     r.name = "redir";
     r.kind = "redirect";
     r.redirectTo = "https://x.example.com/";
-    validateService(r, "moat.example.com");
+    validateService(r, "douve.example.com");
     auto rc = createService(db, r, 1, err);
     CHECK(rc && rc->kind == "redirect" && rc->redirectTo == "https://x.example.com/" &&
           rc->origin == "web");
@@ -219,4 +219,14 @@ TEST(services_loopback_upstream) {
     CHECK(isLoopbackUpstream("localhost:80"));
     CHECK(!isLoopbackUpstream("10.200.0.2:8080"));
     CHECK(!isLoopbackUpstream("1270.0.0.1:80"));
+}
+
+TEST(services_legacy_moat_policy) {
+    Service s;
+    s.name = "old";
+    s.host = "old.example.com";
+    s.upstream = "10.0.0.1:80";
+    s.auth = "moat";
+    CHECK(validateService(s, "hub.example.com").empty());
+    CHECK(s.auth == "douve");
 }

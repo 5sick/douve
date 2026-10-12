@@ -2,7 +2,7 @@
 // 같은 사설망)이 없어도 동작한다: 서비스가 있는 서버의 Agent가 입구로 "나가는" WebSocket을 열어 두고,
 // 입구는 그 위에 yamux 스트림을 열어 요청을 실어 보낸다. 집 서버처럼 공인 IP·포트포워딩이 없어도 된다.
 //
-// 인증: 입구가 nonce를 보내면 Agent가 Ed25519("moat-tunnel:v1:<nonce>:<node_id>") 서명으로 답한다
+// 인증: 입구가 nonce를 보내면 Agent가 Ed25519("douve-tunnel:v1:<nonce>:<node_id>") 서명으로 답한다
 // (Hub가 입구에 노드 공개키를 알려 준다).
 // 스트림: 입구가 "주소\n"을 보내면 Agent는 Hub가 허락한 주소(자기 서비스 업스트림)일 때만 연결해
 // "OK\n" 뒤에 바이트를 그대로 잇는다. 아니면 "ERR 이유\n".
@@ -32,10 +32,10 @@ import (
 )
 
 // Path는 입구가 터널 연결을 받는 경로다 (모든 도메인에서).
-const Path = "/_moat/tunnel"
+const Path = "/_douve/tunnel"
 
 func AuthMessage(nonce string, nodeID int64) string {
-	return "moat-tunnel:v1:" + nonce + ":" + strconv.FormatInt(nodeID, 10)
+	return "douve-tunnel:v1:" + nonce + ":" + strconv.FormatInt(nodeID, 10)
 }
 
 func yamuxConfig() *yamux.Config {

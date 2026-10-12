@@ -6,14 +6,14 @@ import (
 	"os"
 )
 
-const UnitPath = "/etc/systemd/system/moat-agent.service"
+const UnitPath = "/etc/systemd/system/douve-agent.service"
 
 // Unit은 systemd 유닛 내용이다. 상태 수집에 root가 필요하므로(/proc/*/fd, Docker 소켓, wg)
 // root로 돌되 쓰기 가능한 경로를 막는다.
 func Unit(binary string) string {
 	return fmt.Sprintf(`[Unit]
-Description=Moat Agent (서버 상태 수집 · Hub 연결)
-Documentation=https://github.com/5sick/moat
+Description=Douve Agent (서버 상태 수집 · Hub 연결)
+Documentation=https://github.com/5sick/douve
 Wants=network-online.target
 After=network-online.target
 
@@ -25,7 +25,7 @@ NoNewPrivileges=yes
 ProtectSystem=strict
 # 자동 업데이트(실행 파일 교체)와 상태 저장(라우팅 표·인증서)만 쓰기 허용
 ReadWritePaths=/usr/local/bin
-StateDirectory=moat-agent
+StateDirectory=douve-agent
 StateDirectoryMode=0700
 ProtectHome=read-only
 PrivateTmp=yes

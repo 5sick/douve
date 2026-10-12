@@ -8,7 +8,7 @@
 #include <memory>
 #include <sstream>
 
-namespace moat::webauthn {
+namespace douve::webauthn {
 namespace {
 
 struct ItemDeleter {
@@ -195,4 +195,4 @@ std::optional<AssertionResult> verifyAssertion(const Bytes& clientDataJson,
     return AssertionResult{ad->signCount};
 }
 
-} // namespace moat::webauthn
+} // namespace douve::webauthn

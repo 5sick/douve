@@ -8,11 +8,11 @@ import (
 
 func TestValidateHubURL(t *testing.T) {
 	ok := map[string]string{
-		"https://moat.example.com":  "https://moat.example.com",
-		"https://moat.example.com/": "https://moat.example.com",
-		"http://10.200.0.2:8700":    "http://10.200.0.2:8700",
-		"http://127.0.0.1:8700":     "http://127.0.0.1:8700",
-		"http://192.168.1.5":        "http://192.168.1.5",
+		"https://douve.example.com":  "https://douve.example.com",
+		"https://douve.example.com/": "https://douve.example.com",
+		"http://10.200.0.2:8700":     "http://10.200.0.2:8700",
+		"http://127.0.0.1:8700":      "http://127.0.0.1:8700",
+		"http://192.168.1.5":         "http://192.168.1.5",
 	}
 	for in, want := range ok {
 		got, err := ValidateHubURL(in)
@@ -21,11 +21,11 @@ func TestValidateHubURL(t *testing.T) {
 		}
 	}
 	for _, bad := range []string{
-		"http://moat.example.com", // 공용 인터넷 평문
+		"http://douve.example.com", // 공용 인터넷 평문
 		"http://8.8.8.8",
 		"ftp://10.0.0.1",
-		"https://moat.example.com/sub",
-		"moat.example.com",
+		"https://douve.example.com/sub",
+		"douve.example.com",
 		"",
 	} {
 		if _, err := ValidateHubURL(bad); err == nil {

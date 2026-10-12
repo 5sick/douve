@@ -1,7 +1,7 @@
-// 화면 번역: 한국어 원문을 사전(/static/i18n-en.js → window.MOAT_I18N_EN)으로 영어로 바꾼다.
+// 화면 번역: 한국어 원문을 사전(/static/i18n-en.js → window.DOUVE_I18N_EN)으로 영어로 바꾼다.
 // <head>에서 동기로 실행되어 문서가 파싱되는 동안 추가되는 노드까지 MutationObserver로 번역한다
 // (화면에 한국어가 잠깐 보이는 일 없음). 각 화면 코드는 한국어 그대로 두고 여기서만 처리한다.
-//   언어: localStorage 'moat.lang'(ko|en) → 없으면 브라우저 언어(ko면 한국어, 아니면 영어)
+//   언어: localStorage 'douve.lang'(ko|en) → 없으면 브라우저 언어(ko면 한국어, 아니면 영어)
 //   사전 키의 {이름}은 패턴 ({n}·{m}은 숫자만, 값의 {n|단수|복수}는 영어 단·복수). 통째로 없으면 " · ", 줄바꿈 단위로 나눠 번역.
 (function () {
   'use strict';
@@ -9,7 +9,7 @@
 
   function detect() {
     try {
-      const v = localStorage.getItem('moat.lang');
+      const v = localStorage.getItem('douve.lang');
       if (v === 'ko' || v === 'en') return v;
     } catch (_) { /* 저장소를 못 써도 브라우저 언어로 */ }
     return /^ko\b/i.test(navigator.language || '') ? 'ko' : 'en';
@@ -18,7 +18,7 @@
 
   const exact = new Map();
   const patterns = [];
-  const dict = window.MOAT_I18N_EN || {};
+  const dict = window.DOUVE_I18N_EN || {};
   for (const [k, v] of Object.entries(dict)) {
     if (k.startsWith('_')) continue;
     if (!/\{[a-z0-9_]+\}/i.test(k)) { exact.set(k, v); continue; }
@@ -65,11 +65,11 @@
     return r === undefined ? s : lead + r + tail;
   }
 
-  window.moatLang = lang;
-  window.moatLocale = lang === 'ko' ? 'ko-KR' : (/^ko/i.test(navigator.language || '') ? 'en-US' : undefined);
+  window.douveLang = lang;
+  window.douveLocale = lang === 'ko' ? 'ko-KR' : (/^ko/i.test(navigator.language || '') ? 'en-US' : undefined);
   window.t = tr;
-  window.setMoatLang = (l) => {
-    try { localStorage.setItem('moat.lang', l); } catch (_) { /* 이번 화면만 */ }
+  window.setDouveLang = (l) => {
+    try { localStorage.setItem('douve.lang', l); } catch (_) { /* 이번 화면만 */ }
     location.reload();
   };
   document.documentElement.lang = lang;

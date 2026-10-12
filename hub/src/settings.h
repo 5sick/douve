@@ -10,7 +10,7 @@
 #include <mutex>
 #include <string>
 
-namespace moat {
+namespace douve {
 
 struct Credentials {
     std::string googleClientId, googleClientSecret;
@@ -51,4 +51,4 @@ class RuntimeSettings {
 std::string validateTelegram(const std::string& botToken, const std::string& chatId);
 std::string validateGoogle(const std::string& clientId, const std::string& clientSecret);
 
-} // namespace moat
+} // namespace douve

@@ -8,7 +8,7 @@
 #include <cctype>
 #include <sstream>
 
-namespace moat {
+namespace douve {
 namespace {
 
 std::string lower(std::string s) {
@@ -125,7 +125,7 @@ std::string validateService(Service& s, const std::string& hubHost) {
     if (!validHostname(s.host, 2))
         return "도메인 형식이 올바르지 않습니다";
     if (s.host == lower(hubHost))
-        return "Moat Hub 도메인은 서비스로 쓸 수 없습니다";
+        return "Douve Hub 도메인은 서비스로 쓸 수 없습니다";
 
     if (s.kind != "proxy" && s.kind != "redirect")
         return "서비스 유형은 proxy 또는 redirect 입니다";
@@ -177,8 +177,10 @@ std::string validateService(Service& s, const std::string& hubHost) {
         return "업스트림 주소가 올바르지 않습니다";
     s.upstream = uhost + ":" + std::to_string(port);
 
-    if (s.auth != "moat" && s.auth != "public")
-        return "접근 정책은 moat 또는 public 입니다";
+    if (s.auth == "moat") // 이름을 바꾸기 전 값
+        s.auth = "douve";
+    if (s.auth != "douve" && s.auth != "public")
+        return "접근 정책은 douve 또는 public 입니다";
     if (s.publicPaths.size() > 20)
         return "예외 경로는 20개까지입니다";
     for (auto& p : s.publicPaths) {
@@ -336,4 +338,4 @@ bool deleteService(Database& db, std::int64_t id) {
     return db.changes() > 0;
 }
 
-} // namespace moat
+} // namespace douve

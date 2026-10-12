@@ -12,7 +12,7 @@
 #include <stdexcept>
 #include <string>
 
-namespace moat::testing {
+namespace douve::testing {
 
 struct PkeyFree {
     void operator()(EVP_PKEY* p) const { EVP_PKEY_free(p); }
@@ -60,4 +60,4 @@ inline std::pair<Bytes, Bytes> ecXY(EVP_PKEY* k) {
     return {bnParam(k, OSSL_PKEY_PARAM_EC_PUB_X, 32), bnParam(k, OSSL_PKEY_PARAM_EC_PUB_Y, 32)};
 }
 
-} // namespace moat::testing
+} // namespace douve::testing

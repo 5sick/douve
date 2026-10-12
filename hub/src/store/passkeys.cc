@@ -1,6 +1,6 @@
 #include "store/passkeys.h"
 
-namespace moat {
+namespace douve {
 namespace {
 constexpr const char* kCols = "id, user_id, credential_id, public_key_cose, sign_count, name, "
                               "transports, created_at, last_used_at";
@@ -91,4 +91,4 @@ bool renamePasskey(Database& db, std::int64_t userId, std::int64_t id, const std
     return db.changes() > 0;
 }
 
-} // namespace moat
+} // namespace douve
