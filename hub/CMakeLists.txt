@@ -33,7 +33,7 @@ pkg_check_modules(CURL REQUIRED IMPORTED_TARGET libcurl)
 
 # 웹 UI 내장
 set(DOUVE_WEB_DIR ${CMAKE_CURRENT_SOURCE_DIR}/../web)
-set(DOUVE_WEB_FILES home.html login.html account.html privacy.html invite.html dashboard.html node.html services.html settings.html security.html terminal.html app.js i18n.js i18n-en.json icons.js dashboard.js terminal.js xterm.js addon-fit.js xterm.css style.css join.sh favicon.svg favicon.ico apple-touch-icon.png icon-192.png icon-512.png icon-maskable-512.png manifest.webmanifest)
+set(DOUVE_WEB_FILES home.html login.html account.html privacy.html invite.html dashboard.html node.html services.html settings.html security.html terminal.html app.js i18n.js i18n-en.json icons.js dashboard.js terminal.js xterm.js addon-fit.js qrcode.js xterm.css style.css join.sh favicon.svg favicon.ico apple-touch-icon.png icon-192.png icon-512.png icon-maskable-512.png manifest.webmanifest)
 list(TRANSFORM DOUVE_WEB_FILES PREPEND ${DOUVE_WEB_DIR}/ OUTPUT_VARIABLE DOUVE_WEB_DEPS)
 add_custom_command(
     OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/generated/assets.cc
@@ -49,6 +49,7 @@ add_library(douve_core STATIC
     src/config.cc
     src/util/encoding.cc
     src/util/crypto.cc
+    src/util/json.cc
     src/store/db.cc
     src/store/repo.cc
     src/store/passkeys.cc
@@ -62,6 +63,7 @@ add_library(douve_core STATIC
     src/store/services.cc
     src/store/invites.cc
     src/store/recovery.cc
+    src/store/access.cc
     src/store/backup.cc
     src/util/i18n.cc
     src/cluster/live.cc
@@ -71,6 +73,8 @@ add_library(douve_core STATIC
     src/cluster/release.cc
     src/cluster/recording.cc
     src/cluster/terminal.cc
+    src/cluster/term_trust.cc
+    src/cluster/files.cc
     src/cluster/security.cc
     src/routes_nodes.cc
     src/routes_services.cc
@@ -81,6 +85,12 @@ add_library(douve_core STATIC
     src/routes_expose.cc
     src/routes_portmap.cc
     src/routes_channels.cc
+    src/routes_users.cc
+    src/routes_devnet.cc
+    src/routes_checkup.cc
+    src/routes_files.cc
+    src/routes_reach.cc
+    src/store/devnet.cc
     src/cluster/channels.cc
     src/cluster/icons.cc
     src/cluster/apps.cc
@@ -90,6 +100,8 @@ add_library(douve_core STATIC
     src/cli_invite.cc
     src/cli_system.cc
     src/cli_recovery.cc
+    src/cli_audit.cc
+    src/webauthn/cbor_guard.cc
     src/webauthn/cose.cc
     src/webauthn/webauthn.cc
     src/init.cc
@@ -110,6 +122,23 @@ add_executable(douve-hub src/main.cc)
 target_link_libraries(douve-hub PRIVATE douve_core Drogon::Drogon)
 target_compile_options(douve-hub PRIVATE -Wall -Wextra -Wpedantic)
 install(TARGETS douve-hub RUNTIME DESTINATION bin)
+
+# 퍼징 (clang, libFuzzer): cmake -DDOUVE_FUZZ=ON -DCMAKE_CXX_COMPILER=clang++ \
+#   -DCMAKE_CXX_FLAGS="-fsanitize=fuzzer-no-link,address,undefined -g -O1"  → make fuzz 참고
+option(DOUVE_FUZZ "libFuzzer 퍼징 대상 빌드" OFF)
+if(DOUVE_FUZZ)
+    file(GLOB DOUVE_FUZZ_SOURCES CONFIGURE_DEPENDS fuzz/fuzz_*.cc)
+    list(FILTER DOUVE_FUZZ_SOURCES EXCLUDE REGEX "fuzz_seedgen")
+    foreach(src ${DOUVE_FUZZ_SOURCES})
+        get_filename_component(name ${src} NAME_WE)
+        add_executable(${name} ${src})
+        target_link_libraries(${name} PRIVATE douve_core)
+        target_link_options(${name} PRIVATE -fsanitize=fuzzer)
+    endforeach()
+    add_executable(fuzz_seedgen fuzz/fuzz_seedgen.cc)
+    target_include_directories(fuzz_seedgen PRIVATE tests)
+    target_link_libraries(fuzz_seedgen PRIVATE douve_core)
+endif()
 
 if(NOT DOUVE_BUILD_TESTS)
     return()

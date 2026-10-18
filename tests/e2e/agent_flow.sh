@@ -30,7 +30,7 @@ mksession() { # 토큰 reauth_at
     python3 - "$DIR/hub.db" "$1" "$2" <<'PY'
 import hashlib, sqlite3, sys, time
 db = sqlite3.connect(sys.argv[1]); now = int(time.time())
-db.execute("INSERT OR IGNORE INTO users (id, email, created_at) VALUES (1, 'test@example.com', ?)", (now,))
+db.execute("INSERT OR IGNORE INTO users (id, email, created_at, role) VALUES (1, 'test@example.com', ?, 'admin')", (now,))
 db.execute("INSERT INTO sessions VALUES (?, 1, 'passkey', ?, ?, ?, ?, ?, '', '', '')",
            (hashlib.sha256(sys.argv[2].encode()).digest(), now, now, now + 3600, now + 7200, int(sys.argv[3])))
 db.commit()
@@ -43,6 +43,13 @@ O="Origin: $BASE"
 api() { curl -s -H "$C" "$@"; }
 
 echo "[agent_flow]"
+# 인증 전 메시지: 형식이 틀려도 Hub가 죽으면 안 된다 (Json 예외가 이벤트 루프 밖으로 새던 문제)
+WS=$(dirname "$0")/ws_send.py
+python3 "$WS" "localhost:$PORT" /api/agent/connect '{"type":[1]}' >/dev/null 2>&1
+python3 "$WS" "localhost:$PORT" /api/agent/connect '{"type":"auth","node_id":"x","sig":{}}' >/dev/null 2>&1
+python3 "$WS" "localhost:$PORT" /api/agent/connect "$(printf '[%.0s' $(seq 3000))" >/dev/null 2>&1
+sleep 0.3
+curl -sf "$BASE/healthz" >/dev/null && ok "형식이 틀린 Agent 메시지에도 Hub 유지" || bad "형식이 틀린 메시지로 Hub 종료"
 code=$(curl -s -o /dev/null -w '%{http_code}' -X POST -H "$C" -H 'Content-Type: application/json' -d '{}' "$BASE/api/nodes/join-token")
 [ "$code" = 403 ] && ok "Origin 없는 토큰 발급 거부(CSRF)" || bad "CSRF ($code)"
 out=$(curl -s -X POST -H "Cookie: douve_session=stale-session-token-0123456789abcdef" -H "$O" -H 'Content-Type: application/json' -d '{}' "$BASE/api/nodes/join-token")
@@ -118,8 +125,22 @@ kill $AGENT_PID 2>/dev/null
 
 # 자동 업데이트: Hub의 버전이 다르면 Agent가 받아서 교체한 뒤 같은 PID에서 새 실행 파일로 exec (입구 끊김 최소화).
 # 교체된 실행 파일도 같은 지시를 받지만 1시간 내 같은 체크섬은 건너뛰고 접속을 유지해야 한다.
+# Agent는 SHA256SUMS가 믿는 키로 서명되어 있어야만 받는다 (Hub를 믿지 않음).
 mkdir -p "$DIR/bin"; cp "$AGENT" "$DIR/bin/douve-agent"
 echo "e2e-next" > "$DIR/rel/VERSION"
+rm -f "$DIR/rel/SHA256SUMS.minisig"
+STATE_DIRECTORY="$DIR/state" timeout 4 "$DIR/bin/douve-agent" run --dir "$DIR/cli" >"$DIR/unsigned.log" 2>&1
+grep -q "서명 없는 릴리스는 받지 않습니다" "$DIR/unsigned.log" && cmp -s "$DIR/bin/douve-agent" "$AGENT" \
+    && ok "서명 없는 업데이트 거부" || bad "서명 없는 업데이트 ($(tail -3 "$DIR/unsigned.log"))"
+SIGN="$DIST/douve-sign"
+"$SIGN" keygen "$DIR/other.key" "$DIR/other.pub" >/dev/null
+"$SIGN" sign "$DIR/other.key" "$DIR/rel/SHA256SUMS" e2e-next >/dev/null
+STATE_DIRECTORY="$DIR/state" timeout 4 "$DIR/bin/douve-agent" run --dir "$DIR/cli" >"$DIR/untrusted.log" 2>&1
+grep -q "신뢰하는 키로 만든 서명이 아닙니다" "$DIR/untrusted.log" && ok "믿지 않는 키의 서명 거부" || bad "다른 키 ($(tail -3 "$DIR/untrusted.log"))"
+"$SIGN" keygen "$DIR/test.key" "$DIR/test.pub" >/dev/null
+"$SIGN" sign "$DIR/test.key" "$DIR/rel/SHA256SUMS" e2e-next >/dev/null
+cp "$DIR/test.pub" "$DIR/cli/trusted-keys"
+rm -f "$DIR/state/last-update.json"
 STATE_DIRECTORY="$DIR/state" timeout 8 "$DIR/bin/douve-agent" run --dir "$DIR/cli" >"$DIR/upd.log" 2>&1
 rc=$?
 grep -q "새 버전으로 재시작" "$DIR/upd.log" && [ "$(grep -c 'douve-agent 시작' "$DIR/upd.log")" = 2 ] \

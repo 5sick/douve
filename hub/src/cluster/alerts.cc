@@ -22,6 +22,21 @@ std::string duration(std::int64_t seconds) {
 
 } // namespace
 
+void trackFailedUnits(UnitTracker& t, const Json::Value& inventory, std::int64_t now,
+                      std::int64_t forgetSeconds) {
+    if (inventory.isObject()) {
+        for (const auto& u : inventory["failed_units"]) {
+            if (!u.isString())
+                continue;
+            auto [it, inserted] = t.try_emplace(u.asString(), UnitSeen{now, now});
+            if (!inserted && now - it->second.lastSeen > forgetSeconds)
+                it->second.since = now; // 한동안 정상이었다가 다시 실패
+            it->second.lastSeen = now;
+        }
+    }
+    std::erase_if(t, [&](const auto& kv) { return now - kv.second.lastSeen > forgetSeconds; });
+}
+
 Conditions evaluateNode(const NodeView& n, std::int64_t now, const AlertThresholds& th) {
     Conditions c;
     if (!n.connected) {
@@ -48,9 +63,20 @@ Conditions evaluateNode(const NodeView& n, std::int64_t now, const AlertThreshol
     }
     if (n.inventory && n.inventory->isObject()) {
         const auto& inv = *n.inventory;
-        for (const auto& u : inv["failed_units"]) {
+        std::set<std::string> timers;
+        for (const auto& u : inv["timer_units"])
             if (u.isString())
-                c.rules["unit:" + u.asString()] = "systemd 유닛 실패: " + u.asString();
+                timers.insert(u.asString());
+        for (const auto& u : inv["failed_units"]) {
+            if (!u.isString())
+                continue;
+            const std::string name = u.asString();
+            if (timers.count(name)) {
+                auto it = n.units.find(name);
+                if (it != n.units.end() && now - it->second.since < th.timerUnitGraceSeconds)
+                    continue; // 다음 실행에서 풀릴 수 있으니 기다린다
+            }
+            c.rules["unit:" + name] = "systemd 유닛 실패: " + name;
         }
         for (const auto& ct : inv["containers"]) {
             const std::string name = ct.get("name", "").asString();

@@ -1,4 +1,5 @@
 #include "cluster/channels.h"
+#include "util/json.h"
 
 #include "util/crypto.h"
 #include "util/encoding.h"
@@ -19,10 +20,7 @@ std::string compact(const Json::Value& v) {
 
 Json::Value parseJson(const std::string& s) {
     Json::Value v;
-    Json::CharReaderBuilder b;
-    std::string errs;
-    std::istringstream in(s);
-    if (!Json::parseFromStream(b, in, &v, &errs) || !v.isObject())
+    if (!douve::parseJson(s, v) || !v.isObject())
         return Json::Value(Json::objectValue);
     return v;
 }
@@ -67,13 +65,23 @@ Channel fromRow(Statement& s) {
     return c;
 }
 
+// 받는 쪽 검증: HMAC-SHA256(secret, "<timestamp>.<body>")
+void signWebhook(HttpPost& r, const Json::Value& cfg, std::int64_t now) {
+    if (!cfg.isMember("secret"))
+        return;
+    const std::string ts = std::to_string(now);
+    r.headers.emplace_back("X-Douve-Timestamp", ts);
+    r.headers.emplace_back("X-Douve-Signature", "sha256=" + toHex(hmacSha256(jsonStr(cfg, "secret"),
+                                                                             ts + "." + r.body)));
+}
+
 } // namespace
 
 std::string validateChannel(Channel& c) {
     auto& cfg = c.config;
     if (!cfg.isObject())
         cfg = Json::Value(Json::objectValue);
-    auto str = [&](const char* k) { return cfg.get(k, "").asString(); };
+    auto str = [&](const char* k) { return jsonStr(cfg, k); };
     if (c.name.empty())
         c.name = c.kind;
     if (c.name.size() > 40)
@@ -118,6 +126,12 @@ std::string validateChannel(Channel& c) {
         out["url"] = str("url");
         if (!str("secret").empty())
             out["secret"] = str("secret");
+        // 감사 기록 내보내기: 알림과 함께 감사 기록 묶음도 보낸다 (변조 방지용 외부 사본)
+        if (jsonBool(cfg, "audit")) {
+            if (str("secret").empty())
+                return "감사 기록을 보내려면 서명 비밀값이 필요합니다";
+            out["audit"] = true;
+        }
     } else {
         return "알림 채널 종류는 ntfy, discord, slack, webhook 입니다";
     }
@@ -159,7 +173,12 @@ std::int64_t createChannel(Database& db, const Channel& c, std::int64_t now) {
 bool deleteChannel(Database& db, std::int64_t id) {
     auto guard = db.lock();
     Statement(db, "DELETE FROM notify_channels WHERE id = ?").bind(1, id).run();
-    return db.changes() > 0;
+    const bool deleted = db.changes() > 0;
+    // id가 다시 쓰여도 새 채널이 이전 내보내기 위치를 이어받지 않게
+    Statement(db, "DELETE FROM settings WHERE key = ?")
+        .bind(1, "audit.fwd." + std::to_string(id))
+        .run();
+    return deleted;
 }
 
 bool setChannelEnabled(Database& db, std::int64_t id, bool enabled) {
@@ -185,6 +204,7 @@ Json::Value channelJson(const Channel& c) {
     } else {
         v["target"] = maskUrl(c.config.get("url", "").asString());
         v["has_secret"] = c.config.isMember("secret");
+        v["audit"] = jsonBool(c.config, "audit");
     }
     return v;
 }
@@ -229,19 +249,46 @@ HttpPost channelRequest(const Channel& c, const std::string& text, std::int64_t 
     } else { // webhook
         Json::Value b;
         b["source"] = "douve";
+        b["type"] = "alert";
         b["text"] = text;
         b["time"] = Json::Int64(now);
         r.url = cfg.get("url", "").asString();
         r.body = compact(b);
-        if (cfg.isMember("secret")) {
-            // 받는 쪽 검증: HMAC-SHA256(secret, "<timestamp>.<body>")
-            const std::string ts = std::to_string(now);
-            r.headers.emplace_back("X-Douve-Timestamp", ts);
-            r.headers.emplace_back(
-                "X-Douve-Signature",
-                "sha256=" + toHex(hmacSha256(cfg["secret"].asString(), ts + "." + r.body)));
-        }
+        signWebhook(r, cfg, now);
     }
+    return r;
+}
+
+bool sendsAudit(const Channel& c) {
+    return c.enabled && c.kind == "webhook" && jsonBool(c.config, "audit") &&
+           c.config.isMember("secret");
+}
+
+HttpPost auditRequest(const Channel& c, const std::vector<AuditRow>& rows, const Bytes& prev,
+                      std::int64_t now) {
+    Json::Value b;
+    b["source"] = "douve";
+    b["type"] = "audit";
+    b["time"] = Json::Int64(now);
+    // 받는 쪽은 prev부터 각 행의 hash를 이어 계산해 Hub의 기록이 바뀌지 않았는지 확인할 수 있다
+    b["prev_hash"] = toHex(prev);
+    Json::Value recs(Json::arrayValue);
+    for (const auto& r : rows) {
+        Json::Value x;
+        x["id"] = Json::Int64(r.id);
+        x["ts"] = Json::Int64(r.ts);
+        x["user_id"] = r.userId ? Json::Value(Json::Int64(*r.userId)) : Json::Value();
+        x["event"] = r.event;
+        x["ip"] = r.ip;
+        x["detail"] = r.detail;
+        x["hash"] = toHex(r.hash);
+        recs.append(x);
+    }
+    b["records"] = recs;
+    HttpPost r;
+    r.url = jsonStr(c.config, "url");
+    r.body = compact(b);
+    signWebhook(r, c.config, now);
     return r;
 }
 

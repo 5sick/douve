@@ -59,7 +59,7 @@ start_hub
 python3 - "$DIR/hub.db" <<'PY'
 import hashlib, sqlite3, sys, time
 db = sqlite3.connect(sys.argv[1]); now = int(time.time())
-db.execute("INSERT INTO users (id, email, created_at) VALUES (1, 'test@example.com', ?)", (now,))
+db.execute("INSERT INTO users (id, email, created_at, role) VALUES (1, 'test@example.com', ?, 'admin')", (now,))
 db.execute("INSERT INTO sessions VALUES (?, 1, 'passkey', ?, ?, ?, ?, ?, '', '', '')",
            (hashlib.sha256(b"edge-session-token-0123456789abcdef").digest(), now, now, now + 3600, now + 7200, now))
 db.commit()

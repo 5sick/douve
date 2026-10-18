@@ -282,6 +282,96 @@ function initRecoveryCodes() {
   loadRecovery().catch(() => {});
 }
 
+// ---------- 내 기기 (내부 길: Douve WireGuard) ----------
+
+function drawQr(canvas, data) {
+  const qr = qrcode(0, 'L'); // 설정이 길어 오류 정정은 낮게 (화면에서 바로 찍으므로 충분)
+  qr.addData(data);
+  qr.make();
+  const n = qr.getModuleCount();
+  const margin = 4;
+  const cell = Math.floor(canvas.width / (n + margin * 2));
+  const ctx = canvas.getContext('2d');
+  ctx.fillStyle = '#fff';
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  ctx.fillStyle = '#000';
+  const off = Math.floor((canvas.width - cell * n) / 2);
+  for (let r = 0; r < n; r++) for (let c = 0; c < n; c++) if (qr.isDark(r, c)) ctx.fillRect(off + c * cell, off + r * cell, cell, cell);
+}
+
+function fmtAgoSec(ts) {
+  if (!ts) return '연결한 적 없음';
+  const d = Math.max(0, Math.floor(Date.now() / 1000) - ts);
+  if (d < 180) return '연결됨';
+  return `마지막 연결 ${fmtTime(ts)}`;
+}
+
+async function loadDevices() {
+  const { devices, devnet, admin } = await api('/api/devices');
+  $('add-device').hidden = !devnet.ready;
+  $('devnet-status').textContent = devnet.ready
+    ? '이 목록의 기기는 WireGuard로 연결된 동안 내부 길에 올린 앱을 평소 주소로, 로그인 없이 엽니다 (내 권한 안에서).'
+    : devnet.enabled ? '내부 길을 준비하는 중입니다 (입구 서버가 접속하면 켜집니다).' : '내부 길이 꺼져 있습니다. 관리자가 설정 → 내부 길에서 켤 수 있습니다.';
+  const ul = $('devices');
+  ul.replaceChildren();
+  if (devnet.ready && devices.length === 0) ul.append(li([text('span', '등록된 기기가 없습니다.', 'meta')]));
+  for (const d of devices) {
+    const del = text('button', '삭제', 'small danger');
+    del.addEventListener('click', async () => {
+      if (!confirm(`'${d.name}' 기기를 삭제할까요? 이 기기는 바로 내부 길에 들어올 수 없게 됩니다.`)) return;
+      try {
+        await api('/api/devices/delete', { id: d.id });
+        show('삭제했습니다.', 'ok');
+        await loadDevices();
+      } catch (e) { show(e.message); }
+    });
+    const info = document.createElement('div');
+    const title = text('div', d.name);
+    title.dataset.noI18n = ''; // 사용자가 붙인 이름
+    if (admin && !d.mine) title.append(' ', text('span', d.user, 'tag'));
+    info.append(title, text('div', `${d.ip} · ${fmtAgoSec(d.last_handshake)} · 등록 ${fmtTime(d.created_at)}`, 'meta'));
+    const row = document.createElement('div');
+    row.className = 'row';
+    row.append(info, del);
+    ul.append(li([row]));
+  }
+}
+
+function initDevices() {
+  const dlg = $('device-dialog');
+  let config = '';
+  let fileName = 'douve.conf';
+  $('add-device').addEventListener('click', () => {
+    $('device-form').hidden = false;
+    $('device-result').hidden = true;
+    $('device-name').value = '';
+    dlg.showModal();
+  });
+  $('device-form').addEventListener('submit', async (ev) => {
+    if (ev.submitter && ev.submitter.value === 'cancel') return;
+    ev.preventDefault();
+    try {
+      const r = await withReauth(() => api('/api/devices/create', { name: $('device-name').value }));
+      config = r.config;
+      fileName = `douve-${r.device.name.replace(/[^A-Za-z0-9_-]+/g, '-').replace(/^-|-$/g, '') || 'device'}.conf`;
+      drawQr($('device-qr'), config);
+      $('device-form').hidden = true;
+      $('device-result').hidden = false;
+      await loadDevices();
+    } catch (e) { dlg.close(); show(e.message); }
+  });
+  $('device-save').addEventListener('click', () => {
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(new Blob([config], { type: 'text/plain' }));
+    a.download = fileName;
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+  });
+  $('device-close').addEventListener('click', () => dlg.close());
+  dlg.addEventListener('close', () => { config = ''; drawQr($('device-qr'), ' '); }); // 비밀 키를 화면에 남기지 않는다
+  loadDevices().catch(() => {});
+}
+
 async function initAccount() {
   let me;
   try {
@@ -293,6 +383,11 @@ async function initAccount() {
   if (new URLSearchParams(location.search).get('setup') === 'passkey') $('setup-banner').hidden = false;
   if (new URLSearchParams(location.search).get('recovered') === '1') $('recovered-banner').hidden = false;
   initRecoveryCodes();
+  initDevices();
+  // 폰에서는 아래 메뉴에 언어 바꾸기가 없어 여기에 둔다
+  const lang = langSwitch();
+  lang.classList.add('mobile-only');
+  document.querySelector('main').append(lang);
   if (!passkeySupported()) $('add-passkey').disabled = true;
   $('add-passkey').addEventListener('click', addPasskey);
   $('logout').addEventListener('click', async () => {
@@ -350,14 +445,17 @@ async function initInvite() {
 }
 
 // ---------- 공통 레이아웃 (사이드바 / 모바일 하단 탭) ----------
+// need: 이 메뉴를 쓰는 데 필요한 역할 (서버가 API로 다시 확인한다 — 여기서는 숨기기만)
 const NAV = [
   { key: 'home', href: '/', label: '홈', icon: 'house' },
-  { key: 'servers', href: '/dashboard', label: '서버', icon: 'server' },
-  { key: 'services', href: '/services', label: '서비스', icon: 'app-window' },
-  { key: 'security', href: '/security', label: '보안', icon: 'shield-check' },
-  { key: 'settings', href: '/settings', label: '설정', icon: 'settings' },
-  { key: 'account', href: '/account', label: '계정', icon: 'user', wide: true },
+  { key: 'servers', href: '/dashboard', label: '서버', icon: 'server', need: 'operator' },
+  { key: 'services', href: '/services', label: '서비스', icon: 'app-window', need: 'operator' },
+  { key: 'security', href: '/security', label: '보안', icon: 'shield-check', need: 'admin' },
+  { key: 'settings', href: '/settings', label: '설정', icon: 'settings', need: 'admin' },
+  { key: 'account', href: '/account', label: '계정', icon: 'user' },
 ];
+const ROLE_RANK = { app: 0, operator: 1, admin: 2 };
+const roleAllows = (role, need) => !need || (ROLE_RANK[role] ?? 0) >= ROLE_RANK[need];
 
 // 언어 바꾸기 (다른 언어 이름을 보여 준다). 번역하지 않도록 data-no-i18n.
 function langSwitch() {
@@ -385,6 +483,7 @@ function mountShell(active) {
   brand.append(logo, 'Douve');
   side.append(brand);
   const counts = {};
+  const items = {};
   for (const n of NAV) {
     const a = document.createElement('a');
     a.className = `nav-item${n.key === active ? ' on' : ''}${n.wide ? ' wide-only' : ''}`;
@@ -397,6 +496,8 @@ function mountShell(active) {
     c.hidden = true;
     counts[n.key] = c;
     a.append(icon(n.icon, 18), label, c);
+    if (n.need) a.hidden = true; // 역할을 알기 전에는 숨긴다
+    items[n.key] = a;
     if (n.key === 'account') side.append(Object.assign(document.createElement('div'), { className: 'spacer' }));
     side.append(a);
   }
@@ -414,6 +515,9 @@ function mountShell(active) {
 
   const refresh = () => api('/api/summary').then((s) => {
     who.textContent = s.email;
+    for (const n of NAV) items[n.key].hidden = !roleAllows(s.role, n.need);
+    const here = NAV.find((n) => n.key === active);
+    if (here && !roleAllows(s.role, here.need)) location.replace('/');
     const set = (k, n) => { counts[k].textContent = n; counts[k].hidden = !n; };
     set('servers', s.alerts + (s.servers - s.online));
     set('security', s.security_open);

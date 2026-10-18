@@ -6,6 +6,7 @@
 #include "http_util.h"
 #include "store/nodes.h"
 #include "store/repo.h"
+#include "util/json.h"
 
 #include <drogon/drogon.h>
 
@@ -27,10 +28,7 @@ constexpr int kJoinTokenTtl = 15 * 60;
 
 Json::Value parseJson(const std::string& s) {
     Json::Value v;
-    Json::CharReaderBuilder rb;
-    std::istringstream in(s);
-    std::string err;
-    if (!Json::parseFromStream(rb, in, &v, &err))
+    if (!douve::parseJson(s, v))
         return Json::Value(Json::objectValue);
     return v;
 }
@@ -80,16 +78,19 @@ void HubApp::registerNodeRoutes() {
     app.registerHandler(
         "/api/nodes",
         [this, nodeJson](const HttpRequestPtr& req, Callback&& cb) {
-            if (!currentSession(req, now()))
+            auto s = currentSession(req, now());
+            if (!s)
                 return cb(error(drogon::k401Unauthorized, "로그인이 필요합니다"));
+            const auto a = access(*s);
             const auto alerts = openAlerts(*db_);
             Json::Value arr(Json::arrayValue);
             for (const auto& n : listNodes(*db_))
-                arr.append(nodeJson(n, alerts));
+                if (a.node(n.id))
+                    arr.append(nodeJson(n, alerts));
             Json::Value out;
             out["nodes"] = arr;
             out["now"] = Json::Int64(now());
-            {
+            if (a.admin()) {
                 Statement sc(*db_, "SELECT count(*) FROM security_issues WHERE status = 'open'");
                 out["security_open"] = Json::Int64(sc.step() ? sc.int64(0) : 0);
             }
@@ -100,9 +101,10 @@ void HubApp::registerNodeRoutes() {
     app.registerHandler(
         "/api/nodes/{id}",
         [this, nodeJson](const HttpRequestPtr& req, Callback&& cb, std::int64_t id) {
-            if (!currentSession(req, now()))
+            auto s = currentSession(req, now());
+            if (!s)
                 return cb(error(drogon::k401Unauthorized, "로그인이 필요합니다"));
-            auto n = findNode(*db_, id);
+            auto n = access(*s).node(id) ? findNode(*db_, id) : std::nullopt;
             if (!n)
                 return cb(error(drogon::k404NotFound, "노드를 찾을 수 없습니다"));
             Json::Value v = nodeJson(*n, openAlerts(*db_));
@@ -120,8 +122,11 @@ void HubApp::registerNodeRoutes() {
         "/api/nodes/{id}/metrics",
         [this](const HttpRequestPtr& req, Callback&& cb, std::int64_t id) {
             const auto t = now();
-            if (!currentSession(req, t))
+            auto s = currentSession(req, t);
+            if (!s)
                 return cb(error(drogon::k401Unauthorized, "로그인이 필요합니다"));
+            if (!access(*s).node(id))
+                return cb(error(drogon::k404NotFound, "노드를 찾을 수 없습니다"));
             static const std::map<std::string, std::pair<std::int64_t, std::int64_t>> ranges = {
                 {"1h", {3600, 60}},        {"6h", {6 * 3600, 120}},     {"24h", {86400, 300}},
                 {"7d", {7 * 86400, 1800}}, {"30d", {30 * 86400, 7200}},
@@ -275,7 +280,8 @@ void HubApp::registerNodeRoutes() {
     app.registerHandler("/dl/{file}",
                         [this](const HttpRequestPtr&, Callback&& cb, const std::string& file) {
                             static const std::set<std::string> allowed = {
-                                "douve-agent-linux-amd64", "douve-agent-linux-arm64", "SHA256SUMS"};
+                                "douve-agent-linux-amd64", "douve-agent-linux-arm64", "SHA256SUMS",
+                                "SHA256SUMS.minisig"};
                             if (!allowed.count(file))
                                 return cb(HttpResponse::newNotFoundResponse());
                             const auto path = std::filesystem::path(cfg_.agentDir) / file;

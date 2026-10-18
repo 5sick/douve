@@ -1,4 +1,5 @@
 #include "store/services.h"
+#include "util/json.h"
 
 #include "store/nodes.h"
 
@@ -52,13 +53,11 @@ std::string pathsJson(const std::vector<std::string>& paths) {
 
 std::vector<std::string> parsePaths(const std::string& json) {
     Json::Value a;
-    Json::CharReaderBuilder rb;
-    std::istringstream in(json);
-    std::string err;
     std::vector<std::string> out;
-    if (Json::parseFromStream(rb, in, &a, &err) && a.isArray())
+    if (parseJson(json, a) && a.isArray())
         for (const auto& p : a)
-            out.push_back(p.asString());
+            if (p.isString())
+                out.push_back(p.asString());
     return out;
 }
 
@@ -66,7 +65,7 @@ constexpr const char* kCols = "id, name, host, node_id, upstream, auth, public_p
                               "updated_at, grp, description, "
                               "icon, on_home, position, path_prefix, strip_prefix, kind, "
                               "redirect_to, upstream_tls, host_header, "
-                              "timeout, origin";
+                              "timeout, origin, internal, external";
 
 Service readService(Statement& s) {
     Service v;
@@ -93,6 +92,8 @@ Service readService(Statement& s) {
     v.hostHeader = s.text(19);
     v.timeout = static_cast<int>(s.int64(20));
     v.origin = s.text(21);
+    v.internal = s.int64(22) != 0;
+    v.external = s.int64(23) != 0;
     return v;
 }
 
@@ -127,6 +128,8 @@ std::string validateService(Service& s, const std::string& hubHost) {
     if (s.host == lower(hubHost))
         return "Douve Hub 도메인은 서비스로 쓸 수 없습니다";
 
+    if (!s.internal && !s.external)
+        return "내부 길이나 외부 공개 중 하나는 켜야 합니다";
     if (s.kind != "proxy" && s.kind != "redirect")
         return "서비스 유형은 proxy 또는 redirect 입니다";
     // 경로 접두사
@@ -294,8 +297,9 @@ std::optional<Service> createService(Database& db, Service v, std::int64_t now,
     Statement s(db,
                 "INSERT INTO services (name, host, node_id, upstream, auth, public_paths, "
                 "created_at, updated_at, grp, description, icon, on_home, position, path_prefix, "
-                "strip_prefix, kind, redirect_to, upstream_tls, host_header, timeout, origin) "
-                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
+                "strip_prefix, kind, redirect_to, upstream_tls, host_header, timeout, origin, "
+                "internal, external) "
+                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
     s.bind(1, v.name).bind(2, v.host).bind(3, v.nodeId).bind(4, v.upstream).bind(5, v.auth);
     s.bind(6, pathsJson(v.publicPaths)).bind(7, now).bind(8, now).bind(9, v.group);
     s.bind(10, v.description).bind(11, v.icon).bind(12, v.onHome ? 1 : 0).bind(13, v.position);
@@ -303,7 +307,8 @@ std::optional<Service> createService(Database& db, Service v, std::int64_t now,
         .bind(15, v.stripPrefix ? 1 : 0)
         .bind(16, v.kind)
         .bind(17, v.redirectTo);
-    s.bind(18, v.upstreamTls).bind(19, v.hostHeader).bind(20, v.timeout).bind(21, v.origin).run();
+    s.bind(18, v.upstreamTls).bind(19, v.hostHeader).bind(20, v.timeout).bind(21, v.origin);
+    s.bind(22, v.internal ? 1 : 0).bind(23, v.external ? 1 : 0).run();
     return findService(db, db.lastInsertId());
 }
 
@@ -316,7 +321,8 @@ bool updateService(Database& db, const Service& v, std::int64_t now, std::string
     Statement s(db, "UPDATE services SET name = ?, host = ?, node_id = ?, upstream = ?, auth = ?, "
                     "public_paths = ?, updated_at = ?, grp = ?, description = ?, icon = ?, "
                     "on_home = ?, position = ?, path_prefix = ?, strip_prefix = ?, kind = ?, "
-                    "redirect_to = ?, upstream_tls = ?, host_header = ?, timeout = ? WHERE id = ?");
+                    "redirect_to = ?, upstream_tls = ?, host_header = ?, timeout = ?, "
+                    "internal = ?, external = ? WHERE id = ?");
     s.bind(1, v.name).bind(2, v.host).bind(3, v.nodeId).bind(4, v.upstream).bind(5, v.auth);
     s.bind(6, pathsJson(v.publicPaths)).bind(7, now).bind(8, v.group).bind(9, v.description);
     s.bind(10, v.icon).bind(11, v.onHome ? 1 : 0).bind(12, v.position).bind(13, v.pathPrefix);
@@ -324,7 +330,8 @@ bool updateService(Database& db, const Service& v, std::int64_t now, std::string
         .bind(15, v.kind)
         .bind(16, v.redirectTo)
         .bind(17, v.upstreamTls);
-    s.bind(18, v.hostHeader).bind(19, v.timeout).bind(20, v.id).run();
+    s.bind(18, v.hostHeader).bind(19, v.timeout).bind(20, v.internal ? 1 : 0);
+    s.bind(21, v.external ? 1 : 0).bind(22, v.id).run();
     if (db.changes() == 0) {
         error = "서비스를 찾을 수 없습니다";
         return false;

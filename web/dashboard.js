@@ -107,6 +107,63 @@ async function loadNodes() {
   return nodes;
 }
 
+// 터미널 신뢰 목록: 패스키 추가·삭제, 역할·서버 권한 변경은 관리자가 패스키로 승인해야 서버(Agent)에 반영된다.
+// 서버는 승인 없는 변경을 받지 않는다 (Hub가 장악돼도 공격자 패스키를 넣을 수 없게).
+function trustKeyLine(kind, k, names) {
+  const scope = k.admin ? '관리자' : `허락된 서버: ${k.nodes.join(', ')}`;
+  return el('li', {}, [el('span', { text: kind }), ': ',
+    el('span', { 'data-no-i18n': '', text: `${k.user} · ${names[k.id] || '-'}` }), ' (', el('span', { text: scope }), ')']);
+}
+
+let trustAdmin = null; // 관리자만 신뢰 목록을 본다 (처음 한 번 역할 확인)
+
+async function loadTrust(nodes) {
+  const box = $('trust-banner');
+  if (trustAdmin === null) trustAdmin = await api('/api/summary').then((x) => x.role === 'admin', () => false);
+  if (!trustAdmin) return;
+  let st;
+  try {
+    st = await api('/api/terminal/trust');
+  } catch (_) { box.hidden = true; return; }
+  const items = [];
+  if (st.pending) {
+    const cur = new Map(st.keys.map((k) => [k.id, k]));
+    const want = new Map(st.desired.map((k) => [k.id, k]));
+    const lines = [];
+    for (const [id, k] of want) {
+      if (!cur.has(id)) lines.push(trustKeyLine('추가됨', k, st.key_names));
+      else if (JSON.stringify(cur.get(id)) !== JSON.stringify(k)) lines.push(trustKeyLine('바뀜', k, st.key_names));
+    }
+    for (const [id, k] of cur) if (!want.has(id)) lines.push(trustKeyLine('제거됨', k, st.key_names));
+    const btn = el('button', { class: 'primary small', text: '패스키로 승인' });
+    btn.addEventListener('click', async () => {
+      btn.disabled = true;
+      try {
+        const opts = await api('/api/terminal/trust/options', {});
+        const cred = await navigator.credentials.get({ publicKey: toRequestOptions(opts.publicKey) });
+        await api('/api/terminal/trust/sign', { pending: opts.pending, credential: assertionJson(cred) });
+        show('승인했습니다. 서버들에 반영합니다.', 'ok');
+        setTimeout(() => loadTrust(nodes), 1500);
+      } catch (e) {
+        show(e.name ? friendlyWebAuthnError(e) : e.message);
+      }
+      btn.disabled = false;
+    });
+    items.push(el('strong', { text: '터미널 신뢰 목록에 승인되지 않은 변경이 있습니다.' }),
+      el('p', { class: 'meta', text: '서버는 관리자 패스키로 승인한 목록의 패스키로만 터미널을 엽니다. 승인 전까지 아래 변경은 서버에 반영되지 않습니다.' }),
+      el('ul', {}, lines),
+      el('div', {}, [btn]));
+  }
+  const behind = st.nodes.filter((n) => n.connected && (n.error || (n.version || 0) < st.version));
+  if (behind.length) {
+    items.push(el('strong', { text: '터미널 신뢰 목록이 아직 반영되지 않은 서버' }),
+      el('ul', {}, behind.map((n) => el('li', {}, [el('span', { 'data-no-i18n': '', text: n.name }), ': ',
+        el('span', { text: n.error || `버전 ${n.version || 0} / ${st.version}` })]))));
+  }
+  box.replaceChildren(...items);
+  box.hidden = items.length === 0;
+}
+
 function initJoinDialog() {
   const dlg = $('join-dialog');
   let waitTimer = null;
@@ -165,7 +222,7 @@ function initJoinDialog() {
 
 async function initDashboard() {
   initJoinDialog();
-  const refresh = () => loadNodes().catch((e) => {
+  const refresh = () => loadNodes().then(loadTrust).catch((e) => {
     if (e.status === 401) location.href = `/login?rd=${encodeURIComponent(location.pathname)}`;
     else show(e.message);
   });
@@ -467,8 +524,101 @@ async function loadRange() {
   drawAll(seriesFromRows(rows));
 }
 
+// ---------- 연결 진단 ----------
+// Agent가 모은 사실(STUN·공유기)과 외부 접속 검증 결과를 사람이 읽는 말로.
+
+function ipv4(s) { const m = /^(\d+)\.(\d+)\.(\d+)\.(\d+)$/.exec(s || ''); return m ? m.slice(1).map(Number) : null; }
+function isCGNATip(s) { const p = ipv4(s); return !!p && p[0] === 100 && p[1] >= 64 && p[1] < 128; }
+function isPrivateIp(s) {
+  const p = ipv4(s);
+  return !!p && (p[0] === 10 || (p[0] === 172 && p[1] >= 16 && p[1] < 32) || (p[0] === 192 && p[1] === 168));
+}
+
+function diagnose(d) {
+  const rep = d.report;
+  const out = { lines: [], level: 'ok' };
+  const bump = (lv) => { const order = { ok: 0, info: 1, warn: 2, fail: 3 }; if (order[lv] > order[out.level]) out.level = lv; };
+  if (!rep) {
+    out.where = '아직 진단 결과가 없습니다 (서버가 접속하고 1분쯤 뒤에 나옵니다).';
+  } else {
+    const st = rep.stun || {}, rt = rep.router || {};
+    const pub = st.public_ip, ext = rt.external_ip;
+    const gw = rt.kind === 'upnp' ? 'UPnP' : rt.kind === 'natpmp' ? 'NAT-PMP' : '';
+    if (d.cloud) out.where = `클라우드 서버라 공인 IP(${pub || d.last_ip || '?'})가 있습니다. 밖에서 들어오는 걸 막는 건 클라우드 방화벽(보안 목록)입니다.`;
+    else if (st.nat === 'none') out.where = `서버에 공인 IP(${pub})가 바로 있습니다.`;
+    else if (ext && isCGNATip(ext)) { out.where = '통신사 NAT(CGNAT) 뒤에 있습니다. 통신사가 공인 IP를 여러 집과 나눠 써서, 공유기 설정으로는 밖에서 직접 들어올 수 없습니다.'; bump('info'); }
+    else if (ext && isPrivateIp(ext)) { out.where = `공유기가 두 단계입니다 (공유기의 바깥 주소 ${ext}도 사설 주소). 앞쪽 장비(모뎀·다른 공유기)에도 포트를 열어야 밖에서 직접 들어옵니다.`; bump('info'); }
+    else if (ext && pub && ext !== pub) { out.where = `공유기 바깥에 NAT가 하나 더 있습니다 (공유기 외부 주소 ${ext}, 실제 공인 주소 ${pub}).`; bump('info'); }
+    else if (ext) out.where = `공유기 하나 뒤에 있습니다 (공인 IP ${pub || ext}). 공유기가 자동 포트 열기(${gw})를 지원합니다.`;
+    else if (!st.ok) { out.where = '인터넷 쪽 주소를 알아내지 못했습니다 (서버에서 UDP가 막혀 있을 수 있습니다).'; bump('info'); }
+    else out.where = `공유기(또는 사설망) 뒤에 있습니다 (공인 IP ${pub}). 공유기가 자동 포트 열기를 지원하지 않거나 꺼져 있습니다.`;
+    if (st.nat === 'symmetric') out.lines.push(['info', '대칭 NAT: 목적지마다 바깥 포트가 달라 기기끼리 직접(P2P) 연결이 어렵습니다. 터널은 문제없습니다.']);
+  }
+  out.path = {
+    edge: '이 서버가 입구입니다 — 인터넷에서 80·443으로 들어옵니다.',
+    tunnel: 'Douve는 이 서버의 앱에 터널로 연결합니다 — 공유기 설정 없이 동작합니다.',
+    direct: 'Douve 입구가 이 서버에 직접(사설망·공인 IP) 연결합니다.',
+    none: '입구 서버가 없습니다. 앱을 밖에 공개하려면 공인 IP가 있는 서버를 입구로 정하세요.',
+  }[d.path];
+  const v = d.verify;
+  if (!v || !v.at) out.test = '밖에서 접속 시험: 아직 안 함';
+  else if (!v.tested) {
+    out.test = { no_public_ip: '밖에서 접속 시험: 이 서버의 공인 주소를 몰라 시험하지 못했습니다.',
+      no_tester: '밖에서 접속 시험: 시험해 줄 다른 공인 서버가 없습니다 (다른 서버를 하나 더 연결하면 됩니다).',
+    }[v.reason] || '밖에서 접속 시험: 시험한 서버가 답하지 않았습니다.';
+  } else {
+    out.test = `밖에서 접속 시험: ${v.tester}에서 ${v.host}로 (${fmtTime(v.at)})`;
+    for (const p of v.ports || []) {
+      const shut = p.error === 'timeout' ? '막힘 (응답 없음)' : '닫힘';
+      if (p.port === 22) {
+        if (p.open) { out.lines.push(['warn', 'SSH(22): 인터넷에 열려 있습니다 — Douve 터미널을 쓰면 닫아도 됩니다 (방화벽·보안 목록에서).']); bump('warn'); }
+        else out.lines.push(['ok', `SSH(22): ${shut}`]);
+      } else if (p.open) {
+        out.lines.push(['ok', `${p.port === 443 ? 'HTTPS(443)' : 'HTTP(80)'}: 밖에서 들어옵니다`]);
+      } else if (d.edge) {
+        out.lines.push(['fail', `${p.port === 443 ? 'HTTPS(443)' : 'HTTP(80)'}: ${shut} — 입구인데 밖에서 닿지 않습니다. 클라우드 방화벽이나 공유기 포트포워딩을 확인하세요.`]);
+        bump('fail');
+      } else {
+        out.lines.push(['info', `${p.port === 443 ? 'HTTPS(443)' : 'HTTP(80)'}: ${shut}${d.path === 'tunnel' ? ' (터널을 쓰므로 필요 없습니다)' : ''}`]);
+      }
+    }
+  }
+  return out;
+}
+
+const DIAG_TAG = { ok: ['정상', ''], info: ['참고', 'sev-info'], warn: ['주의', 'sev-warn'], fail: ['위험', 'sev-crit'] };
+
+async function loadDiag() {
+  const { nodes } = await api('/api/reach');
+  const d = nodes.find((n) => n.id === state.id);
+  if (!d) { $('diag').replaceChildren(el('div', { class: 'meta', text: '진단할 수 없습니다.' })); return; }
+  const r = diagnose(d);
+  const [label, cls] = DIAG_TAG[r.level];
+  const lines = r.lines.map(([lv, text]) => el('div', {}, [el('span', { class: `dot ${lv === 'ok' ? 'on' : lv === 'info' ? '' : 'off'}` }), ' ', el('span', { text })]));
+  $('diag').replaceChildren(
+    el('div', {}, [el('span', { class: `tag ${cls}`, text: label }), ' ', el('span', { text: r.where })]),
+    el('div', { class: 'meta', text: r.path || '' }),
+    el('div', { class: 'meta', text: r.test }),
+    ...lines,
+    d.report_at ? el('div', { class: 'meta', text: `진단 ${fmtTime(d.report_at)}` }) : '',
+  );
+}
+
 async function initNode() {
   state.id = Number(new URLSearchParams(location.search).get('id'));
+  loadDiag().catch(() => {});
+  setInterval(() => { if (!document.hidden) loadDiag().catch(() => {}); }, 60000);
+  $('diag-run').addEventListener('click', async () => {
+    $('diag-run').disabled = true;
+    show('진단하는 중… (밖에서 접속 시험 포함, 최대 15초)', 'ok');
+    try {
+      await api('/api/reach/run', { node_id: state.id });
+      await new Promise((res) => setTimeout(res, 2500)); // 서버 쪽 진단(STUN) 보고를 조금 기다린다
+      await loadDiag();
+      show('진단했습니다.', 'ok');
+    } catch (e) { show(e.message); }
+    $('diag-run').disabled = false;
+  });
   try {
     state.features = (await api('/api/summary')).features;
     if (state.features && !state.features.monitoring) {
@@ -558,18 +708,26 @@ function serviceRow(s) {
     el('div', { class: 'meta' }, [
       s.kind === 'redirect' ? `리다이렉트 → ${s.redirect_to} · `
         : `${s.node_name || '외부'} · ${['', 'https://', 'https(검증 안 함)://'][s.upstream_tls] || ''}${s.upstream}${s.path_prefix !== '/' ? ` · 경로 ${s.path_prefix}${s.strip_prefix ? ' (접두사 제거)' : ''}` : ''} · `,
-      el('span', { class: 'tag', text: s.kind === 'redirect' ? '리다이렉트' : auth }),
+      ...(s.internal ? [el('span', { class: 'tag', text: '내부 길' }), ' '] : []),
+      ...(s.external ? [el('span', { class: 'tag', text: s.kind === 'redirect' ? '외부 · 리다이렉트' : `외부 · ${auth}` })] : []),
       s.public_paths.length ? ` 예외: ${s.public_paths.join(', ')}` : '',
     ]),
     el('div', { class: 'meta' }, [healthView(s.health)]),
   ]);
 }
 
+function renderServices() {
+  const d = svcState.data;
+  const f = svcState.filter || 'all';
+  const list = d.services.filter((s) => f === 'all' || s[f]);
+  $('services').replaceChildren(...(list.length ? list.map(serviceRow)
+    : [el('li', { class: 'none', text: d.services.length ? '이 길로 연 서비스가 없습니다.' : '아직 서비스가 없습니다. "서비스 추가"로 서버의 포트를 도메인에 연결하세요.' })]));
+}
+
 async function loadServices() {
   const d = await api('/api/services');
   svcState.data = d;
-  $('services').replaceChildren(...(d.services.length ? d.services.map(serviceRow)
-    : [el('li', { class: 'none', text: '아직 서비스가 없습니다. "서비스 추가"로 서버의 포트를 도메인에 연결하세요.' })]));
+  renderServices();
   const down = d.services.filter((s) => s.health && !s.health.ok).length;
   $('summary').textContent = `서비스 ${d.services.length}개${down ? ` · 응답 없음 ${down}개` : ''}`;
   const banner = $('edge-banner');
@@ -675,8 +833,10 @@ async function loadCandidates() {
 function syncAuth() {
   const redirect = $('svc-kind').value === 'redirect';
   const pub = document.querySelector('input[name="svc-auth"]:checked').value === 'public';
-  $('svc-paths-box').hidden = pub || redirect;
+  const external = $('svc-external').checked;
+  $('svc-paths-box').hidden = pub || redirect || !external;
   for (const id of ['svc-node-box', 'svc-candidates-box', 'svc-upstream-box', 'svc-auth-box', 'svc-proxy-opts']) $(id).hidden = redirect;
+  if (!external) $('svc-auth-box').hidden = true; // 내부 길은 기기 신원으로 확인
   if (redirect) $('svc-candidates-box').hidden = true;
   $('svc-redirect-box').hidden = !redirect;
   $('svc-upstream').required = !redirect;
@@ -699,6 +859,12 @@ async function openServiceDialog(s = null, prefill = null) {
   $('svc-host').value = s?.host ?? '';
   $('svc-host').dataset.touched = s ? '1' : '';
   for (const r of document.querySelectorAll('input[name="svc-auth"]')) r.checked = r.value === (s?.auth ?? 'douve');
+  // 새 서비스: 내부 길이 켜져 있으면 내부에서 먼저 시험하고 원할 때 외부로 공개
+  const devnet = !!svcState.data?.devnet;
+  $('svc-internal').checked = s ? s.internal : devnet;
+  $('svc-external').checked = s ? s.external : !devnet;
+  $('svc-internal').disabled = !devnet && !(s && s.internal);
+  $('svc-ways-help').textContent = devnet ? '' : '내부 길이 꺼져 있습니다 (설정 → 내부 길).';
   $('svc-paths').value = (s?.public_paths ?? []).join('\n');
   $('svc-group').value = s?.group ?? '';
   $('svc-desc').value = s?.description ?? '';
@@ -726,11 +892,23 @@ async function openServiceDialog(s = null, prefill = null) {
   $('svc-dialog').showModal();
 }
 
+function initServiceFilter() {
+  for (const b of document.querySelectorAll('#svc-filter .chip')) {
+    b.addEventListener('click', () => {
+      svcState.filter = b.dataset.f;
+      for (const x of document.querySelectorAll('#svc-filter .chip')) x.classList.toggle('on', x === b);
+      if (svcState.data) renderServices();
+    });
+  }
+}
+
 function initServiceDialog() {
+  initServiceFilter();
   $('add-service').addEventListener('click', () => openServiceDialog().catch((e) => show(e.message)));
   $('svc-node').addEventListener('change', loadCandidates);
   for (const r of document.querySelectorAll('input[name="svc-auth"]')) r.addEventListener('change', syncAuth);
   $('svc-kind').addEventListener('change', syncAuth);
+  $('svc-external').addEventListener('change', syncAuth);
   $('svc-prefix').addEventListener('input', syncAuth);
   $('svc-host').addEventListener('input', () => { $('svc-host').dataset.touched = '1'; });
   $('svc-name').addEventListener('input', () => {
@@ -759,14 +937,19 @@ function initServiceDialog() {
       upstream_tls: Number($('svc-tls').value),
       host_header: $('svc-hosthdr').value.trim(),
       timeout: Number($('svc-timeout').value || 0),
+      internal: $('svc-internal').checked,
+      external: $('svc-external').checked,
     };
+    if (!body.internal && !body.external) { show('내부 길이나 외부 공개 중 하나는 켜야 합니다.'); return; }
     if (s) body.id = s.id;
     try {
       await withReauth(() => api(s ? '/api/services/update' : '/api/services/create', body));
       $('svc-dialog').close();
       await loadServices();
       loadApps().catch(() => {});
-      show(s ? '저장했습니다. 입구에 바로 반영됩니다.' : `추가했습니다. https://${body.host} 로 접속할 수 있습니다 (첫 접속 때 인증서 발급에 몇 초 걸릴 수 있음).`, 'ok');
+      show(s ? '저장했습니다. 입구에 바로 반영됩니다.'
+        : body.external ? `추가했습니다. https://${body.host} 로 접속할 수 있습니다 (첫 접속 때 인증서 발급에 몇 초 걸릴 수 있음).`
+          : `추가했습니다. 내부 길에 연결된 기기에서 https://${body.host} 로 열립니다.`, 'ok');
     } catch (e) { show(e.message); }
   });
 }
@@ -824,7 +1007,7 @@ const CH_HELP = {
   ntfy: '휴대폰에 ntfy 앱을 설치하고 이 토픽을 구독하세요. 공개 서버(ntfy.sh)에서는 토픽 이름이 곧 비밀번호이니 추측하기 어렵게 두세요.',
   discord: 'Discord 채널 설정 → 연동 → 웹후크 → 새 웹후크 → 웹후크 URL 복사.',
   slack: 'Slack 앱 디렉터리 → Incoming Webhooks → 채널 선택 → Webhook URL 복사.',
-  webhook: 'Douve가 {"source":"douve","text":…,"time":…}를 POST합니다. 서명 비밀값을 넣으면 X-Douve-Signature: sha256=HMAC(비밀값, "시각.본문")와 X-Douve-Timestamp 헤더를 붙입니다.',
+  webhook: 'Douve가 {"source":"douve","type":"alert","text":…,"time":…}를 POST합니다. 서명 비밀값을 넣으면 X-Douve-Signature: sha256=HMAC(비밀값, "시각.본문")와 X-Douve-Timestamp 헤더를 붙입니다. 감사 기록을 함께 받으면 {"type":"audit","prev_hash":…,"records":[…]} 묶음이 순서대로 옵니다 (각 기록의 hash로 이어 계산해 확인).',
 };
 const CH_KIND = { ntfy: 'ntfy', discord: 'Discord', slack: 'Slack', webhook: '웹훅' };
 
@@ -839,6 +1022,7 @@ function syncChannelForm() {
   $('ch-ntfy-box').hidden = k !== 'ntfy';
   $('ch-url-box').hidden = k === 'ntfy';
   $('ch-secret-box').hidden = k !== 'webhook';
+  $('ch-audit-box').hidden = k !== 'webhook';
   $('ch-help').textContent = CH_HELP[k];
   if (k === 'ntfy' && !$('ch-topic').value) $('ch-topic').value = randomTopic();
 }
@@ -860,6 +1044,7 @@ function channelRow(c) {
   });
   return el('li', {}, [el('div', { class: 'li-row' }, [
     el('div', {}, [el('strong', { text: c.name }), ' ', el('span', { class: 'tag', text: CH_KIND[c.kind] || c.kind }),
+      ...(c.audit ? [' ', el('span', { class: 'tag', text: '감사 기록' })] : []),
       el('div', { class: 'meta', text: c.target })]),
     el('div', { class: 'row' }, [el('label', { class: 'check' }, [on, '켬']), test, del]),
   ])]);
@@ -879,10 +1064,11 @@ function initChannels() {
     const kind = $('ch-kind').value;
     const config = kind === 'ntfy'
       ? { server: $('ch-server').value.trim(), topic: $('ch-topic').value.trim(), token: $('ch-token').value.trim() }
-      : { url: $('ch-url').value.trim(), secret: $('ch-secret').value.trim() };
+      : { url: $('ch-url').value.trim(), secret: $('ch-secret').value.trim(), audit: kind === 'webhook' && $('ch-audit').checked };
     try {
       await withReauth(() => api('/api/channels/create', { kind, name: $('ch-name').value.trim(), config }));
       for (const id of ['ch-name', 'ch-server', 'ch-topic', 'ch-token', 'ch-url', 'ch-secret']) $(id).value = '';
+      $('ch-audit').checked = false;
       $('ch-add').open = false;
       await loadChannels();
       show('알림 채널을 추가했습니다. "테스트 발송"으로 확인하세요.', 'ok');
@@ -891,8 +1077,37 @@ function initChannels() {
   loadChannels().catch(() => {});
 }
 
+async function loadDevnet() {
+  const d = await api('/api/devnet');
+  $('devnet-on').checked = d.enabled;
+  $('devnet-port').value = d.port;
+  $('devnet-endpoint').value = d.endpoint;
+  $('devnet-endpoint').placeholder = d.endpoint_default;
+  $('devnet-help').textContent = `클라우드 방화벽(보안 목록)에서 입구 서버의 UDP ${d.port}번을 열어야 합니다. 포트나 주소를 바꾸면 이미 등록한 기기는 다시 등록해야 합니다.`;
+  let state;
+  if (!d.gateway) state = '입구(edge) 서버가 없습니다. 서버 화면에서 입구를 정하세요.';
+  else if (!d.enabled) state = `꺼짐 · 맡을 입구: ${d.gateway}`;
+  else if (d.ready && d.running) state = `동작 중 · 입구 ${d.gateway} · 내부 주소 ${d.address} · 등록 기기 ${d.devices}대`;
+  else state = `준비 중 · 입구 ${d.gateway}${d.gateway_connected ? '' : ' (접속 안 됨)'}`;
+  $('devnet-state').textContent = state;
+}
+
+function initDevnet() {
+  $('devnet-form').addEventListener('submit', async (ev) => {
+    ev.preventDefault();
+    try {
+      await withReauth(() => api('/api/devnet/update', { enabled: $('devnet-on').checked, port: Number($('devnet-port').value), endpoint: $('devnet-endpoint').value.trim() }));
+      show('저장했습니다.', 'ok');
+      setTimeout(() => loadDevnet().catch(() => {}), 1500);
+      await loadDevnet();
+    } catch (e) { show(e.message); }
+  });
+  loadDevnet().catch(() => {});
+}
+
 async function initSettings() {
   initChannels();
+  initDevnet();
   await loadSettings().catch((e) => {
     if (e.status === 401) location.href = `/login?rd=${encodeURIComponent(location.pathname)}`;
     else show(e.message);
@@ -928,16 +1143,119 @@ async function initSettings() {
   $('gg-clear').addEventListener('click', () => {
     if (confirm('Google 로그인을 끌까요? (패스키 로그인은 그대로)')) saveSettings({ google: { clear: true } }, 'Google 로그인을 껐습니다.');
   });
+  let invitePick = null;
+  const syncInvite = async () => {
+    const t = await accessTargets();
+    invitePick = accessPicker($('invite-role').value, [], [], t);
+    $('invite-access').replaceChildren(invitePick.el);
+  };
+  $('invite-role').addEventListener('change', () => syncInvite().catch(() => {}));
+  syncInvite().catch(() => {});
+  loadUsers().catch(() => {});
   $('invite-form').addEventListener('submit', async (ev) => {
     ev.preventDefault();
     try {
-      const r = await withReauth(() => api('/api/invites/create', { email: $('invite-email').value.trim() }));
+      const r = await withReauth(() => api('/api/invites/create', {
+        email: $('invite-email').value.trim(), role: $('invite-role').value, ...(invitePick ? invitePick.value() : {}),
+      }));
       $('invite-link').textContent = r.link;
       $('invite-result').hidden = false;
       show(`${r.email} 초대 링크를 만들었습니다. 안전한 경로(직접 메시지 등)로 전달하세요.`, 'ok');
     } catch (e) { show(e.message); }
   });
   $('invite-copy').addEventListener('click', () => navigator.clipboard.writeText($('invite-link').textContent).then(() => show('복사했습니다.', 'ok')));
+}
+
+// ---------- 사용자·역할 ----------
+
+const ROLE_LABEL = { admin: '관리자', operator: '운영자', app: '앱만' };
+let targetsCache = null;
+async function accessTargets() {
+  if (!targetsCache) {
+    const [{ nodes }, { services }] = await Promise.all([api('/api/nodes'), api('/api/services')]);
+    targetsCache = { nodes: nodes.map((n) => ({ id: n.id, name: n.name })), services: services.map((v) => ({ id: v.id, name: v.name, host: v.host })) };
+  }
+  return targetsCache;
+}
+
+// 역할에 맞는 권한 고르기: 운영자는 서버(그 서버의 앱 포함) + 앱, 앱만은 앱
+function accessPicker(role, nodeIds, serviceIds, t) {
+  const boxes = { nodes: [], services: [] };
+  const group = (title, kind, list, chosen, label) => {
+    if (!list.length) return el('p', { class: 'meta', text: `${title}: 없음` });
+    const wrap = el('div', { class: 'checks' });
+    for (const x of list) {
+      const c = el('input', { type: 'checkbox' });
+      c.checked = chosen.includes(x.id);
+      c.dataset.id = x.id;
+      boxes[kind].push(c);
+      wrap.append(el('label', { class: 'check' }, [c, ' ', label(x)]));
+    }
+    return el('div', { class: 'stack' }, [el('div', { class: 'meta', text: title }), wrap]);
+  };
+  const parts = [];
+  if (role === 'operator') parts.push(group('허락할 서버', 'nodes', t.nodes, nodeIds, (n) => n.name));
+  if (role !== 'admin') parts.push(group(role === 'operator' ? '따로 허락할 앱 (다른 서버의 앱)' : '허락할 앱', 'services', t.services, serviceIds, (v) => `${v.name} (${v.host})`));
+  const ids = (kind) => boxes[kind].filter((c) => c.checked).map((c) => Number(c.dataset.id));
+  return { el: el('div', { class: 'stack' }, parts), value: () => ({ nodes: ids('nodes'), services: ids('services') }) };
+}
+
+function accessSummary(u, t) {
+  if (u.role === 'admin') return '모든 서버·앱';
+  const name = (list, id) => (list.find((x) => x.id === id) || { name: `#${id}` }).name;
+  const parts = [];
+  if (u.role === 'operator') parts.push(`서버: ${u.nodes.map((id) => name(t.nodes, id)).join(', ') || '없음'}`);
+  parts.push(`앱: ${u.services.map((id) => name(t.services, id)).join(', ') || (u.role === 'operator' ? '서버의 앱' : '없음')}`);
+  return parts.join(' · ');
+}
+
+function userRow(u, t) {
+  const editor = el('div', { class: 'stack' });
+  editor.hidden = true;
+  const role = el('select', {}, Object.entries(ROLE_LABEL).map(([k, v]) => {
+    const o = el('option', { value: k, text: v });
+    o.selected = k === u.role;
+    return o;
+  }));
+  let pick = accessPicker(u.role, u.nodes, u.services, t);
+  const pickBox = el('div', {}, [pick.el]);
+  role.addEventListener('change', () => { pick = accessPicker(role.value, u.nodes, u.services, t); pickBox.replaceChildren(pick.el); });
+  const save = el('button', { class: 'small primary', type: 'button', text: '저장' });
+  save.addEventListener('click', async () => {
+    try {
+      await withReauth(() => api('/api/users/update', { id: u.id, role: role.value, ...pick.value() }));
+      show('권한을 바꿨습니다.', 'ok');
+      await loadUsers();
+    } catch (e) { show(e.message); }
+  });
+  editor.append(el('label', { class: 'field' }, ['역할 ', role]), pickBox, el('div', { class: 'row end' }, [save]));
+  const edit = el('button', { class: 'small', type: 'button', text: '권한' });
+  edit.addEventListener('click', () => { editor.hidden = !editor.hidden; });
+  const buttons = [edit];
+  if (!u.me) {
+    const del = el('button', { class: 'small danger', type: 'button', text: '삭제' });
+    del.addEventListener('click', async () => {
+      if (!confirm(`${u.email} 사용자를 삭제할까요? 패스키와 로그인 세션도 함께 지워집니다.`)) return;
+      try { await withReauth(() => api('/api/users/delete', { id: u.id })); show('삭제했습니다.', 'ok'); await loadUsers(); } catch (e) { show(e.message); }
+    });
+    buttons.push(del);
+  }
+  const seen = u.last_login_at ? `마지막 로그인 ${new Date(u.last_login_at * 1000).toLocaleString()}` : '로그인한 적 없음';
+  return el('li', {}, [
+    el('div', { class: 'li-row' }, [
+      el('div', {}, [el('strong', { text: u.email }), ' ', el('span', { class: 'tag', text: ROLE_LABEL[u.role] || u.role }),
+        ...(u.me ? [' ', el('span', { class: 'tag', text: '나' })] : []),
+        el('div', { class: 'meta', text: accessSummary(u, t) }),
+        el('div', { class: 'meta', text: `${seen} · 패스키 ${u.passkeys}개` })]),
+      el('div', { class: 'row' }, buttons),
+    ]),
+    editor,
+  ]);
+}
+
+async function loadUsers() {
+  const [{ users }, t] = await Promise.all([api('/api/users'), accessTargets()]);
+  $('users').replaceChildren(...users.map((u) => userRow(u, t)));
 }
 
 // ---------- 보안 ----------
@@ -999,7 +1317,91 @@ async function loadSecurity() {
   ]), '기록 없음');
 }
 
+// ---------- 보안 점검표 ----------
+// 항목 문구는 화면에서 만든다 (Agent는 id·상태·사실만 보낸다)
+const CHECK_TEXT = {
+  ssh_password: { title: 'SSH 비밀번호 로그인', ok: '꺼짐 (키로만 로그인)', fail: '켜져 있음 — 약한 비밀번호 하나로 서버가 뚫릴 수 있습니다',
+    fix: '비밀번호·키보드 입력 SSH 로그인을 끕니다 (/etc/ssh/sshd_config.d/00-douve.conf, sshd -t로 검사한 뒤 적용, 실패하면 되돌림). 키가 없는 계정은 SSH로 들어올 수 없게 됩니다. Douve 터미널은 그대로입니다.' },
+  ssh_root: { title: 'SSH root 로그인', ok: '막힘', warn: '키로는 root 로그인 가능', fail: '비밀번호로도 root 로그인 가능',
+    fix: 'SSH로 root 로그인을 막습니다 (PermitRootLogin no). 관리 계정으로 들어와 sudo를 쓰세요.' },
+  ssh_match: { title: '계정별 SSH 예외', ok: '비밀번호를 다시 허용하는 예외 없음', warn: '일부 계정은 비밀번호 로그인이 다시 허용됩니다' },
+  auto_updates: { title: '자동 보안 업데이트', ok: '켜짐', fail: '꺼짐 — 알려진 취약점이 그대로 남습니다',
+    fix: '자동 보안 업데이트를 설치하고 켭니다 (Ubuntu: unattended-upgrades / Rocky·RHEL: dnf-automatic, 보안 업데이트만). 몇 분 걸릴 수 있습니다.' },
+  time_sync: { title: '시간 동기화', ok: '맞음', warn: '켜져 있지만 아직 맞추지 못했습니다', fail: '꺼짐 — 터미널을 열 때 서명 시각 확인이 실패할 수 있습니다',
+    fix: '시간 동기화(NTP)를 켭니다 (timedatectl set-ntp true).' },
+  reboot: { title: '재부팅', ok: '필요 없음', warn: '업데이트를 적용하려면 재부팅이 필요합니다 (터미널에서 직접)' },
+  public_ports: { title: '인터넷 쪽에서 열린 포트', ok: '없음', info: '필요 없는 포트는 닫거나 127.0.0.1에만 여세요' },
+};
+const CHECK_STATUS = { ok: ['정상', ''], warn: ['주의', 'sev-warn'], fail: ['위험', 'sev-crit'], info: ['참고', 'sev-info'], unknown: ['확인 불가', 'sev-info'], na: ['해당 없음', ''] };
+
+async function signedFix(nodeId, check) {
+  const opts = await api('/api/checkup/fix/options', { node_id: nodeId, check });
+  const cred = await navigator.credentials.get({ publicKey: toRequestOptions(opts.publicKey) });
+  const { rid } = await api('/api/checkup/fix', { pending: opts.pending, credential: assertionJson(cred) });
+  for (let i = 0; i < 600; i++) {
+    await new Promise((r) => setTimeout(r, 1000));
+    const st = await api(`/api/checkup/fix/status?rid=${encodeURIComponent(rid)}`);
+    if (st.done) return st;
+  }
+  throw new Error('서버에서 답이 없습니다. 잠시 후 점검표를 다시 확인하세요.');
+}
+
+function checkRow(node, r) {
+  const t = CHECK_TEXT[r.id] || { title: r.id };
+  const [label, cls] = CHECK_STATUS[r.status] || [r.status, ''];
+  const f = r.facts || {};
+  let text = t[r.status] || (r.status === 'unknown' ? '확인할 수 없음' : r.status === 'na' ? '해당 없음' : '');
+  const extra = [];
+  if (r.id === 'ssh_match' && f.where) extra.push(f.where);
+  if (r.id === 'auto_updates' && f.tool) extra.push(f.tool);
+  if (r.id === 'reboot' && f.packages) extra.push(f.packages);
+  if (r.id === 'public_ports' && f.ports) extra.push(f.ports);
+  if (f.no_include) extra.push('sshd_config가 sshd_config.d/*.conf를 먼저 읽지 않아 자동으로 고칠 수 없습니다');
+  if (r.error) extra.push(r.error);
+  const info = el('div', {}, [el('div', {}, [el('span', { class: `tag ${cls}`, text: label }), ' ', el('strong', { text: t.title })]),
+    el('div', { class: 'meta', text }),
+    ...extra.map((x) => el('div', { class: 'meta', 'data-no-i18n': '', text: x }))]);
+  const row = el('div', { class: 'li-row' }, [info]);
+  if (r.fixable && r.status !== 'ok') {
+    const btn = el('button', { class: 'small primary', text: '고치기' });
+    btn.addEventListener('click', async () => {
+      if (!confirm(`${node.name}: ${window.t(t.fix || t.title)}\n\n${window.t('패스키로 승인하면 서버가 서명을 확인한 뒤 실행합니다.')}`)) return;
+      btn.disabled = true;
+      show('서버에서 고치는 중…', 'ok');
+      try {
+        const st = await signedFix(node.id, r.id);
+        if (st.ok) show(`고쳤습니다: ${st.message}`, 'ok'); else show(`고치지 못했습니다: ${st.error}`);
+      } catch (e) {
+        show(e.message === 'term_trust_missing' ? '이 서버가 믿는 패스키가 이 계정에 없습니다. 관리자가 서버 화면에서 신뢰 목록 변경을 승인해야 합니다.'
+          : e.message === 'passkey_required' ? '패스키가 필요합니다. 계정 화면에서 등록하세요.' : e.name ? friendlyWebAuthnError(e) : e.message);
+      }
+      btn.disabled = false;
+      setTimeout(() => loadCheckup().catch(() => {}), 1500);
+    });
+    row.append(el('div', { class: 'row' }, [btn]));
+  }
+  return el('li', {}, [row]);
+}
+
+async function loadCheckup() {
+  const { nodes } = await api('/api/checkup');
+  const order = { fail: 0, warn: 1, unknown: 2, info: 3, ok: 4, na: 5 };
+  $('checkup').replaceChildren(...nodes.map((n) => {
+    const again = el('button', { class: 'small', text: '다시 점검' });
+    again.disabled = !n.connected;
+    again.addEventListener('click', async () => {
+      try { await api('/api/checkup/run', { node_id: n.id }); show('점검을 요청했습니다.', 'ok'); setTimeout(() => loadCheckup().catch(() => {}), 3000); } catch (e) { show(e.message); }
+    });
+    const results = (n.results || []).filter((r) => r.status !== 'na').sort((a, b) => (order[a.status] ?? 9) - (order[b.status] ?? 9));
+    const bad = results.filter((r) => r.status === 'fail').length;
+    const head = el('div', { class: 'row' }, [el('div', {}, [el('strong', { 'data-no-i18n': '', text: n.name }),
+      el('div', { class: 'meta', text: n.checked_at ? `${bad ? `위험 ${bad}개 · ` : ''}점검 ${fmtTime(n.checked_at)}` : '아직 점검 결과가 없습니다' })]), again]);
+    return el('div', { class: 'card stack' }, [head, el('ul', { class: 'list' }, results.map((r) => checkRow(n, r)))]);
+  }));
+}
+
 async function initSecurity() {
+  loadCheckup().catch((e) => show(e.message));
   $('kind').addEventListener('change', () => loadSecurity().catch((e) => show(e.message)));
   const refresh = () => loadSecurity().catch((e) => {
     if (e.status === 401) location.href = `/login?rd=${encodeURIComponent(location.pathname)}`;

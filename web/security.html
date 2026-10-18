@@ -30,6 +30,11 @@
   <p class="meta">SSH 로그인, 관리 계정이 아닌 sudo, 계정·중요 파일 변경, 새로 열린 포트를 감시합니다.
     Douve 터미널에서 직접 한 작업은 알리지 않습니다. "확인함"은 24시간 동안 같은 일로 알리지 않고, "문제 없음"은 앞으로 계속 알리지 않습니다.</p>
 
+  <h2>보안 점검표</h2>
+  <p class="meta">서버마다 출입에 관한 설정을 점검합니다 (접속할 때와 6시간마다). "고치기"는 그 서버·그 항목에 대한 패스키 서명을
+    서버가 직접 확인한 뒤에만 실행됩니다.</p>
+  <div id="checkup" class="stack"></div>
+
   <div class="row"><h2>확인이 필요한 이슈</h2>
     <button id="ack-all" class="small" hidden>모두 확인함</button></div>
   <ul class="list" id="open"></ul>

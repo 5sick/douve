@@ -13,6 +13,7 @@
 <meta name="theme-color" content="#0c1424">
 <link rel="stylesheet" href="/static/style.css">
 <script src="/static/icons.js" defer></script>
+<script src="/static/qrcode.js" defer></script>
 <script src="/static/app.js" defer></script>
 </head>
 <body data-page="account" data-shell="account">
@@ -38,6 +39,34 @@
 
   <div class="row"><h2>패스키</h2><button id="add-passkey" class="primary small">패스키 추가</button></div>
   <ul class="list" id="passkeys"></ul>
+
+  <div class="row"><h2>내 기기 (내부 길)</h2><button id="add-device" class="primary small" hidden>기기 추가</button></div>
+  <div class="meta" id="devnet-status"></div>
+  <ul class="list" id="devices"></ul>
+
+  <dialog id="device-dialog">
+    <form method="dialog" class="stack" id="device-form">
+      <h2>기기 추가</h2>
+      <label class="field">기기 이름
+        <input id="device-name" maxlength="40" placeholder="예: 내 아이폰" autocomplete="off" required>
+      </label>
+      <div class="row end">
+        <button value="cancel" formnovalidate>취소</button>
+        <button id="device-create" class="primary" value="default">만들기</button>
+      </div>
+    </form>
+    <div id="device-result" class="stack" hidden>
+      <h2>WireGuard 앱으로 연결하세요</h2>
+      <ol class="meta">
+        <li>이 기기에 WireGuard 앱을 설치합니다 (App Store·Play 스토어·wireguard.com).</li>
+        <li>폰: 앱에서 "QR 코드로 만들기"로 아래 QR을 찍습니다. PC: 설정 파일을 받아 "파일에서 터널 가져오기".</li>
+        <li>연결을 켜면 내부 길에 올린 앱이 평소 주소 그대로 열립니다.</li>
+      </ol>
+      <canvas id="device-qr" class="qr" width="296" height="296"></canvas>
+      <div class="meta">이 설정에는 이 기기의 비밀 키가 들어 있고 지금 한 번만 보입니다. 다른 사람에게 보여 주지 마세요.</div>
+      <div class="row"><button id="device-save" class="small">설정 파일 받기</button><button id="device-close" class="primary small">닫기</button></div>
+    </div>
+  </dialog>
 
   <div class="row"><h2>복구 코드</h2><button id="new-codes" class="small">새로 만들기</button></div>
   <div class="meta" id="recovery-status">불러오는 중…</div>

@@ -63,6 +63,8 @@ header.top { display: flex; justify-content: space-between; align-items: flex-en
 header.top .actions, .nav { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .nav a { color: var(--muted); font-weight: 550; }
 
+.mobile-only { display: none; } /* 아래 @media에서 폰만 보이게 */
+
 @media (max-width: 860px) {
   .shell { display: block; }
   .side {
@@ -70,7 +72,9 @@ header.top .actions, .nav { display: flex; align-items: center; gap: 8px; flex-w
     flex-direction: row; justify-content: space-around; padding: 6px 4px calc(6px + env(safe-area-inset-bottom));
     border-right: 0; border-top: 1px solid var(--line);
   }
-  .side .brand, .side .spacer, .side .who, .side .nav-item.wide-only { display: none; }
+  /* 폰: 아래 메뉴에 계정까지 6개. 언어 바꾸기는 계정 화면 안으로 (.mobile-only) */
+  .side .brand, .side .spacer, .side .who, .side .nav-item.wide-only, .side .lang-switch { display: none; }
+  .mobile-only { display: block; }
   .nav-item { flex-direction: column; gap: 2px; font-size: 11px; padding: 6px 8px; position: relative; }
   .nav-item .count { position: absolute; top: 0; right: 4px; min-width: 16px; height: 16px; font-size: 10px; margin: 0; }
   main { padding: 20px 16px 96px; }
@@ -177,6 +181,7 @@ dialog form.stack { gap: 14px; }
 .chips { display: flex; flex-wrap: wrap; gap: 6px; }
 .chip { padding: 5px 11px; font-size: 13px; font-weight: 550; border-radius: 999px; }
 .chip.used { opacity: .45; }
+.chip.on { background: var(--accent); color: var(--accent-text); border-color: var(--accent); }
 
 /* ---------- 홈 ---------- */
 .home-head { display: flex; justify-content: space-between; align-items: flex-end; gap: 16px; flex-wrap: wrap; margin-bottom: 18px; }
@@ -246,6 +251,7 @@ details.more summary { cursor: pointer; font-weight: 600; font-size: 14px; }
 details.more[open] summary { margin-bottom: 12px; }
 label.check { display: flex; align-items: center; gap: 8px; font-size: 14px; color: var(--text); }
 label.check input { width: auto; }
+.checks { display: flex; flex-wrap: wrap; gap: 6px 16px; }
 code { font-family: ui-monospace, "SFMono-Regular", Menlo, monospace; font-size: .92em; background: var(--surface-2); border: 1px solid var(--line); border-radius: 5px; padding: 1px 5px; }
 #apps-section .meta:first-of-type { margin-bottom: 10px; }
 #apps-section details.more { margin-top: 10px; }
@@ -260,3 +266,4 @@ details.recovery form { margin-top: 10px; }
 .lang-switch:hover { color: var(--text); text-decoration: underline; }
 .card .lang-switch { display: block; margin: 14px auto 0; text-align: center; }
 html[lang="en"] .only-ko, html:not([lang="en"]) .only-en { display: none; }
+canvas.qr { width: 296px; max-width: 100%; height: auto; align-self: center; border-radius: 8px; image-rendering: pixelated; }

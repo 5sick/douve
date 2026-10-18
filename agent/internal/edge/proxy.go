@@ -37,9 +37,10 @@ type verifier struct {
 }
 
 type verdict struct {
-	ok      bool
-	user    string
-	expires time.Time
+	ok        bool
+	forbidden bool // 로그인은 했지만 이 앱 권한이 없음 (Hub 403)
+	user      string
+	expires   time.Time
 }
 
 func newVerifier() *verifier {
@@ -57,14 +58,14 @@ type hubError struct{}
 
 func (*hubError) Error() string { return "로그인 서버에 연결할 수 없습니다" }
 
-// check는 세션 쿠키 값이 유효한지 확인한다. Hub에 닿지 못하면 errHubDown.
-func (v *verifier) check(ctx context.Context, verifyURL, token string) (bool, string, error) {
+// check는 세션 쿠키 값으로 이 앱에 들어가도 되는지 확인한다. Hub에 닿지 못하면 errHubDown.
+func (v *verifier) check(ctx context.Context, verifyURL, token string) (verdict, error) {
 	key := sha256.Sum256([]byte(verifyURL + "\x00" + token))
 	now := time.Now()
 	v.mu.Lock()
 	if d, ok := v.cache[key]; ok && now.Before(d.expires) {
 		v.mu.Unlock()
-		return d.ok, d.user, nil
+		return d, nil
 	}
 	if len(v.cache) > 10000 { // 오래된 항목 정리
 		for k, d := range v.cache {
@@ -77,12 +78,12 @@ func (v *verifier) check(ctx context.Context, verifyURL, token string) (bool, st
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, verifyURL, nil)
 	if err != nil {
-		return false, "", err
+		return verdict{}, err
 	}
 	req.AddCookie(&http.Cookie{Name: sessionCookie, Value: token})
 	resp, err := v.client.Do(req)
 	if err != nil {
-		return false, "", errHubDown
+		return verdict{}, errHubDown
 	}
 	resp.Body.Close()
 	var d verdict
@@ -91,13 +92,15 @@ func (v *verifier) check(ctx context.Context, verifyURL, token string) (bool, st
 		d = verdict{ok: true, user: resp.Header.Get("X-Douve-User"), expires: now.Add(v.ttlOK)}
 	case http.StatusUnauthorized:
 		d = verdict{ok: false, expires: now.Add(v.ttlBad)}
+	case http.StatusForbidden:
+		d = verdict{ok: false, forbidden: true, expires: now.Add(v.ttlBad)}
 	default:
-		return false, "", errHubDown
+		return verdict{}, errHubDown
 	}
 	v.mu.Lock()
 	v.cache[key] = d
 	v.mu.Unlock()
-	return d.ok, d.user, nil
+	return d, nil
 }
 
 // Handler는 라우팅 표에 따라 요청을 처리한다. 표는 원자적으로 교체된다.
@@ -320,24 +323,9 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		errorPage(w, r, http.StatusNotFound, "알 수 없는 주소", "이 도메인은 Douve에 등록되어 있지 않습니다.")
 		return
 	}
-	// 클라이언트가 보낸 사용자 헤더는 절대 믿지 않는다. Tailscale 신원 헤더도 지운다
-	// (Hub가 Tailscale 모드면 127.0.0.1에서 온 이 헤더를 로그인으로 인정하는데, 입구도 127.0.0.1에서 Hub로 간다)
-	r.Header.Del("X-Douve-User")
-	for _, h := range []string{"Tailscale-User-Login", "Tailscale-User-Name", "Tailscale-User-Profile-Pic", "Tailscale-Headers-Info"} {
-		r.Header.Del(h)
-	}
-
+	dropIdentityHeaders(r)
 	if route.Kind == "redirect" {
-		// 경로·쿼리는 그대로 붙인다 (접두사는 떼고)
-		rest := r.URL.RequestURI()
-		if p := route.prefix(); p != "/" {
-			rest = strings.TrimPrefix(rest, p)
-		}
-		target := strings.TrimRight(route.RedirectTo, "/")
-		if rest == "" || rest[0] != '/' {
-			rest = "/" + rest
-		}
-		http.Redirect(w, r, target+rest, http.StatusFound)
+		redirect(w, r, route)
 		return
 	}
 
@@ -351,20 +339,65 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		if c, err := r.Cookie(sessionCookie); err == nil {
 			token = c.Value
 		}
-		ok, user := false, ""
+		var d verdict
 		if token != "" {
 			var err error
-			ok, user, err = h.verifier.check(r.Context(), t.VerifyURL, token)
+			d, err = h.verifier.check(r.Context(), route.verifyURL(t.VerifyURL), token)
 			if err != nil {
 				errorPage(w, r, http.StatusBadGateway, "로그인 서버에 연결할 수 없습니다",
 					"Douve Hub가 응답하지 않습니다. 잠시 후 다시 시도하세요.")
 				return
 			}
 		}
-		if !ok {
+		if d.forbidden {
+			errorPage(w, r, http.StatusForbidden, "이 앱을 쓸 권한이 없습니다",
+				"Douve 관리자에게 이 앱 권한을 요청하세요.")
+			return
+		}
+		if !d.ok {
 			h.toLogin(w, r, t)
 			return
 		}
+		stripSession(r)
+		r.Header.Set("X-Douve-User", d.user)
+	}
+	if r.TLS != nil {
+		r = r.WithContext(context.WithValue(r.Context(), tlsKey{}, true))
+	}
+	h.proxy(route).ServeHTTP(w, r)
+}
+
+// dropIdentityHeaders: 클라이언트가 보낸 사용자 헤더는 절대 믿지 않는다. Tailscale 신원 헤더도 지운다
+// (Hub가 Tailscale 모드면 127.0.0.1에서 온 이 헤더를 로그인으로 인정하는데, 입구도 127.0.0.1에서 Hub로 간다)
+func dropIdentityHeaders(r *http.Request) {
+	r.Header.Del("X-Douve-User")
+	for _, h := range []string{"Tailscale-User-Login", "Tailscale-User-Name", "Tailscale-User-Profile-Pic", "Tailscale-Headers-Info"} {
+		r.Header.Del(h)
+	}
+}
+
+// redirect: 경로·쿼리는 그대로 붙인다 (접두사는 떼고)
+func redirect(w http.ResponseWriter, r *http.Request, route *Route) {
+	rest := r.URL.RequestURI()
+	if p := route.prefix(); p != "/" {
+		rest = strings.TrimPrefix(rest, p)
+	}
+	target := strings.TrimRight(route.RedirectTo, "/")
+	if rest == "" || rest[0] != '/' {
+		rest = "/" + rest
+	}
+	http.Redirect(w, r, target+rest, http.StatusFound)
+}
+
+// ServeInternal은 내부 길(기기 WireGuard)로 온 요청을 넘긴다. 신원·권한은 호출자(devnet)가 기기 주소로
+// 이미 확인했다 — 로그인 검사 없이 user를 X-Douve-User로 붙인다. Hub 자신(auth=hub)은 쿠키 그대로.
+func (h *Handler) ServeInternal(w http.ResponseWriter, r *http.Request, route *Route, user string) {
+	dropIdentityHeaders(r)
+	if route.Kind == "redirect" {
+		redirect(w, r, route)
+		return
+	}
+	if route.Auth != "hub" {
 		stripSession(r)
 		r.Header.Set("X-Douve-User", user)
 	}
@@ -372,6 +405,11 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		r = r.WithContext(context.WithValue(r.Context(), tlsKey{}, true))
 	}
 	h.proxy(route).ServeHTTP(w, r)
+}
+
+// ErrorPage는 사용자 언어로 짧은 오류 화면을 쓴다.
+func ErrorPage(w http.ResponseWriter, r *http.Request, code int, title, msg string) {
+	errorPage(w, r, code, title, msg)
 }
 
 func (h *Handler) toLogin(w http.ResponseWriter, r *http.Request, t *Table) {

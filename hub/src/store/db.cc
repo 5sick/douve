@@ -269,6 +269,71 @@ const std::vector<const char*> kMigrations = {
     R"sql(
     UPDATE services SET auth = 'douve' WHERE auth = 'moat';
     )sql",
+    // v15: 감사 기록 해시 체인 — 각 행의 hash = SHA-256(이전 행 hash + 이 행 내용). 중간 행을
+    // 고치거나 지우면 끊긴다.
+    R"sql(
+    ALTER TABLE audit_log ADD COLUMN hash BLOB;
+    )sql",
+    // v16: 역할과 서버·앱별 권한. 기존 사용자는 모두 관리자(지금까지와 같음), 새 행의 기본은 가장
+    // 좁은 app (초대를 열기만 한 사람 등).
+    //   admin: 전부 / operator: 허락된 서버(그 서버의 앱 포함) / app: 허락된 앱만
+    R"sql(
+    ALTER TABLE users ADD COLUMN role TEXT NOT NULL DEFAULT 'app';
+    UPDATE users SET role = 'admin';
+    ALTER TABLE invites ADD COLUMN role TEXT NOT NULL DEFAULT 'admin';
+    ALTER TABLE invites ADD COLUMN grants TEXT NOT NULL DEFAULT '{}';
+    CREATE TABLE user_grants (
+        user_id   INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        kind      TEXT NOT NULL,      -- node | service
+        target_id INTEGER NOT NULL,
+        PRIMARY KEY (user_id, kind, target_id)
+    );
+    )sql",
+    // v17: 터미널 신뢰 목록 (Agent가 터미널 열기 패스키 서명을 직접 확인하는 데 쓰는 키 목록).
+    // 판마다 한 행. 첫 판만 서명 없이(sig = ''), 그다음은 관리자 패스키 서명(JSON).
+    R"sql(
+    CREATE TABLE term_trust (
+        version     INTEGER PRIMARY KEY,
+        snapshot    TEXT NOT NULL,
+        sig         TEXT NOT NULL DEFAULT '',
+        signer_id   INTEGER,
+        created_at  INTEGER NOT NULL
+    );
+    )sql",
+    // v18: 두 개의 길. 서비스마다 내부 길(Douve WireGuard로 연결된 기기)·외부 길(인터넷 공개
+    // 도메인).
+    // 기존 서비스는 지금처럼 외부만. 기기 = 사용자의 폰·PC (WireGuard 공개키만 저장, 개인키는 한 번
+    // 보여 주고 버림).
+    R"sql(
+    ALTER TABLE services ADD COLUMN internal INTEGER NOT NULL DEFAULT 0;
+    ALTER TABLE services ADD COLUMN external INTEGER NOT NULL DEFAULT 1;
+    CREATE TABLE devices (
+        id         INTEGER PRIMARY KEY,
+        user_id    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        name       TEXT NOT NULL,
+        pubkey     TEXT NOT NULL UNIQUE,
+        ip         TEXT NOT NULL UNIQUE,
+        created_at INTEGER NOT NULL
+    );
+    )sql",
+    // v19: 보안 점검표 — 노드마다 마지막 점검 결과 (Agent가 보낸 JSON 그대로)
+    R"sql(
+    CREATE TABLE checkups (
+        node_id    INTEGER PRIMARY KEY REFERENCES nodes(id) ON DELETE CASCADE,
+        results    TEXT NOT NULL,
+        checked_at INTEGER NOT NULL
+    );
+    )sql",
+    // v20: 연결 진단 — 노드마다 마지막 진단(Agent 보고)과 외부 접속 검증 결과
+    R"sql(
+    CREATE TABLE reach (
+        node_id     INTEGER PRIMARY KEY REFERENCES nodes(id) ON DELETE CASCADE,
+        report      TEXT NOT NULL DEFAULT '{}',
+        at          INTEGER NOT NULL DEFAULT 0,
+        verify      TEXT NOT NULL DEFAULT '{}',
+        verified_at INTEGER NOT NULL DEFAULT 0
+    );
+    )sql",
 };
 
 [[noreturn]] void fail(sqlite3* db, const std::string& what) {
@@ -393,6 +458,9 @@ std::int64_t Database::lastInsertId() const {
 }
 int Database::changes() const {
     return sqlite3_changes(db_);
+}
+bool Database::inTransaction() const {
+    return sqlite3_get_autocommit(db_) == 0;
 }
 
 int Database::schemaVersion() {

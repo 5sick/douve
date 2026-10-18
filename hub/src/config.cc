@@ -54,7 +54,8 @@ std::string HubConfig::effectiveInternalUrl() const {
     return "http://" + host + ":" + std::to_string(listenPort);
 }
 
-std::optional<HubConfig> parseConfig(const std::string& json, std::string& error) {
+namespace {
+std::optional<HubConfig> parseConfigImpl(const std::string& json, std::string& error) {
     Json::Value root;
     Json::CharReaderBuilder builder;
     std::string parseErrors;
@@ -162,6 +163,19 @@ std::optional<HubConfig> parseConfig(const std::string& json, std::string& error
         return std::nullopt;
     }
     return c;
+}
+
+} // namespace
+
+// 형식이 틀린 값(예: "google"이 객체가 아니라 배열)에서 jsoncpp가 예외를 던지므로 오류로 바꾼다
+// (퍼징으로 발견).
+std::optional<HubConfig> parseConfig(const std::string& json, std::string& error) {
+    try {
+        return parseConfigImpl(json, error);
+    } catch (const Json::Exception& e) {
+        error = std::string("설정 파일 형식 오류: ") + e.what();
+        return std::nullopt;
+    }
 }
 
 std::optional<HubConfig> loadConfigFile(const std::string& path, std::string& error) {

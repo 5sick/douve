@@ -1,4 +1,5 @@
 #include "auth/google.h"
+#include "util/json.h"
 
 #include "util/crypto.h"
 
@@ -95,10 +96,7 @@ void GoogleOidc::completeLogin(const std::string& code, const std::string& verif
         if (!r.ok)
             return done(std::nullopt, "토큰 서버에 연결할 수 없습니다: " + r.error);
         Json::Value body;
-        std::string parseErr;
-        Json::CharReaderBuilder rb;
-        std::istringstream in(r.body);
-        const bool parsed = Json::parseFromStream(rb, in, &body, &parseErr);
+        const bool parsed = parseJson(r.body, body) && body.isObject();
         if (r.status != 200 || !parsed || !body["id_token"].isString()) {
             return done(std::nullopt, "토큰 교환 실패 (HTTP " + std::to_string(r.status) + ")");
         }

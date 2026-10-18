@@ -1,6 +1,12 @@
 #include "cluster/alerts.h"
 #include "cluster/live.h"
+#include "cluster/release.h"
 #include "testing.h"
+
+#include <unistd.h>
+
+#include <filesystem>
+#include <fstream>
 
 using namespace douve;
 
@@ -101,6 +107,43 @@ TEST(alerts_thresholds_units_containers) {
     CHECK(!c.stale);
 }
 
+TEST(alerts_timer_unit_waits_for_grace) {
+    NodeView n;
+    n.id = 1;
+    n.connected = true;
+    Json::Value inv;
+    inv["failed_units"].append("dnf-makecache.service");
+    inv["failed_units"].append("nginx.service");
+    inv["timer_units"].append("dnf-makecache.service");
+    n.inventory = inv;
+    trackFailedUnits(n.units, inv, 1000);
+    auto c = evaluateNode(n, 1000);
+    CHECK(c.rules.count("unit:nginx.service") == 1); // 타이머가 아니면 바로
+    CHECK(c.rules.count("unit:dnf-makecache.service") == 0);
+    // 다음 실행 중(activating)이라 잠깐 목록에서 빠져도 연속 실패로 본다
+    Json::Value running;
+    running["failed_units"].append("nginx.service");
+    for (std::int64_t t = 1060; t <= 4540; t += 60)
+        trackFailedUnits(n.units, inv, t);
+    trackFailedUnits(n.units, running, 4600);
+    trackFailedUnits(n.units, inv, 4660);
+    CHECK_EQ(n.units.at("dnf-makecache.service").since, 1000);
+    for (std::int64_t t = 4720; t <= 8200; t += 60)
+        trackFailedUnits(n.units, inv, t);
+    CHECK(evaluateNode(n, 8100).rules.count("unit:dnf-makecache.service") == 0);
+    CHECK(evaluateNode(n, 8200).rules.count("unit:dnf-makecache.service") == 1);
+    // 한동안 정상이었다가 다시 실패하면 처음부터 기다린다
+    trackFailedUnits(n.units, running, 9000);
+    CHECK(n.units.count("dnf-makecache.service") == 0);
+    trackFailedUnits(n.units, inv, 9100);
+    CHECK(evaluateNode(n, 9100).rules.count("unit:dnf-makecache.service") == 0);
+    // 이전 Agent(timer_units 없음)는 예전처럼 바로 알린다
+    Json::Value old;
+    old["failed_units"].append("dnf-makecache.service");
+    n.inventory = old;
+    CHECK(evaluateNode(n, 9100).rules.count("unit:dnf-makecache.service") == 1);
+}
+
 TEST(alerts_reconcile_opens_resolves_and_holds_when_stale) {
     std::map<std::int64_t, Conditions> desired;
     desired[1].rules["disk:/"] = "디스크";
@@ -131,4 +174,21 @@ TEST(alerts_reconcile_opens_resolves_and_holds_when_stale) {
     // 평가 대상이 아닌 노드의 알림은 그대로
     a = reconcile({OpenAlert{12, 2, "mem", "m", 1}}, desired);
     CHECK(a.resolve.empty());
+}
+
+TEST(release_loads_signature) {
+    const auto dir =
+        std::filesystem::temp_directory_path() / ("douve-rel-" + std::to_string(::getpid()));
+    std::filesystem::create_directories(dir);
+    const std::string sums = std::string(64, 'a') + "  douve-agent-linux-amd64\n" +
+                             std::string(64, 'b') + "  douve-hub-linux-amd64\n";
+    std::ofstream(dir / "VERSION") << "v0.3.0\n";
+    std::ofstream(dir / "SHA256SUMS") << sums;
+    auto r = loadAgentRelease(dir.string());
+    CHECK(r && r->version == "v0.3.0" && r->sha256.at("amd64") == std::string(64, 'a'));
+    CHECK(r && r->sums == sums && r->signature.empty()); // 서명 없으면 빈 값 → Agent가 거부
+    std::ofstream(dir / "SHA256SUMS.minisig") << "untrusted comment: x\nSIG\n";
+    r = loadAgentRelease(dir.string());
+    CHECK(r && r->signature == "untrusted comment: x\nSIG\n");
+    std::filesystem::remove_all(dir);
 }

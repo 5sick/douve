@@ -79,6 +79,19 @@ func (s *Server) Connected(nodeID int64) bool {
 	return sess != nil && !sess.IsClosed()
 }
 
+// ConnectedNodes는 터널이 살아 있는 노드들이다 (연결 진단).
+func (s *Server) ConnectedNodes() []int64 {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	var out []int64
+	for id, sess := range s.sessions {
+		if sess != nil && !sess.IsClosed() {
+			out = append(out, id)
+		}
+	}
+	return out
+}
+
 // Dial은 노드의 터널로 addr에 연결한다.
 func (s *Server) Dial(ctx context.Context, nodeID int64, addr string) (net.Conn, error) {
 	s.mu.Lock()

@@ -49,7 +49,7 @@ start_hub
 python3 - "$DIR/hub.db" <<'PY'
 import hashlib, sqlite3, sys, time
 db = sqlite3.connect(sys.argv[1]); now = int(time.time())
-db.execute("INSERT INTO users (id, email, created_at, allowed) VALUES (1, 'me@example.com', ?, 1)", (now,))
+db.execute("INSERT INTO users (id, email, created_at, allowed, role) VALUES (1, 'me@example.com', ?, 1, 'admin')", (now,))
 db.execute("INSERT INTO users (id, email, created_at, allowed) VALUES (2, 'gone@example.com', ?, 0)", (now,))
 db.execute("INSERT INTO notify_channels (kind, name, config, enabled, created_at) VALUES ('webhook', 'hook', ?, 1, ?)",
            ('{"url":"http://127.0.0.1:18872/h"}', now))

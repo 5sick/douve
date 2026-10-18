@@ -1,4 +1,5 @@
 #include "store/nodes.h"
+#include "util/json.h"
 
 #include "util/crypto.h"
 
@@ -188,10 +189,7 @@ void setMeshAddress(Database& db, std::int64_t id, const std::string& address) {
 
 std::string pickMeshAddress(const std::string& inventoryJson) {
     Json::Value inv;
-    Json::CharReaderBuilder rb;
-    std::istringstream in(inventoryJson);
-    std::string err;
-    if (!Json::parseFromStream(rb, in, &inv, &err))
+    if (!parseJson(inventoryJson, inv) || !inv.isObject())
         return {};
     std::string fallback, tailscale;
     for (const auto& a : inv["system"]["addresses"]) {

@@ -7,17 +7,21 @@
 package edge
 
 import (
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net/netip"
 	"os"
 	"path/filepath"
 	"sort"
+	"strconv"
 	"strings"
 )
 
 // Route는 도메인 하나의 라우팅 규칙이다.
 type Route struct {
+	ID          int64    `json:"id"` // Hub 서비스 id (앱별 권한 확인용, Hub 자신은 0)
 	Host        string   `json:"host"`
 	Upstream    string   `json:"upstream"`
 	Auth        string   `json:"auth"` // douve | public | hub
@@ -38,6 +42,18 @@ type NodeInfo struct {
 	ID     int64  `json:"id"`
 	PubKey string `json:"pubkey"` // Ed25519, base64url
 	Mode   string `json:"mode"`   // auto | direct | tunnel
+}
+
+// verifyURL은 이 앱에 대한 권한을 묻는 주소다 (서비스 id가 없으면 Hub가 관리자만 허용).
+func (r *Route) verifyURL(base string) string {
+	if r.ID <= 0 {
+		return base
+	}
+	sep := "?"
+	if strings.Contains(base, "?") {
+		sep = "&"
+	}
+	return base + sep + "service=" + strconv.FormatInt(r.ID, 10)
 }
 
 func (r *Route) prefix() string {
@@ -62,6 +78,89 @@ type Table struct {
 	LoginURL  string     `json:"login_url"`
 	ACMEEmail string     `json:"acme_email"`
 	Routes    []Route    `json:"routes"`
+	// 내부 길: Douve가 관리하는 WireGuard로 연결된 사용자 기기만 들어오는 길 (없으면 끔)
+	Devnet *Devnet `json:"devnet,omitempty"`
+}
+
+// Devnet은 입구가 여는 기기용 WireGuard 망이다 (package devnet이 띄운다).
+// 연결된 기기의 DNS가 Routes의 도메인을 Address로 풀어 주고, 요청은 기기 신원(WireGuard 키 = 사용자)으로
+// 권한을 확인한 뒤 같은 프록시로 넘긴다. 로그인 화면 없음.
+type Devnet struct {
+	ListenPort int     `json:"listen_port"` // UDP
+	Address    string  `json:"address"`     // 입구의 내부 주소 (예: 10.201.0.1)
+	Peers      []Peer  `json:"peers"`
+	Routes     []Route `json:"routes"` // 내부 길로 여는 서비스 (Hub 자신 포함 가능)
+}
+
+// Peer는 등록된 기기 하나.
+type Peer struct {
+	PubKey   string  `json:"pubkey"` // WireGuard 공개키 (base64)
+	IP       string  `json:"ip"`     // 기기 주소 (예: 10.201.0.2)
+	User     string  `json:"user"`   // 사용자 이메일 (X-Douve-User)
+	All      bool    `json:"all,omitempty"`
+	Services []int64 `json:"services,omitempty"` // All이 아니면 들어갈 수 있는 서비스
+}
+
+// Allows는 이 기기가 서비스에 들어가도 되는지 본다 (누구나 공개 앱은 등록된 기기면 허용).
+func (p *Peer) Allows(r *Route) bool {
+	if p.All || r.Auth == "public" || r.Auth == "hub" {
+		return true
+	}
+	for _, id := range p.Services {
+		if id == r.ID && id > 0 {
+			return true
+		}
+	}
+	return false
+}
+
+// PeerByIP는 기기 주소로 기기를 찾는다 (WireGuard가 주소 위조를 막으므로 주소 = 신원).
+func (d *Devnet) PeerByIP(ip string) *Peer {
+	for i := range d.Peers {
+		if d.Peers[i].IP == ip {
+			return &d.Peers[i]
+		}
+	}
+	return nil
+}
+
+// Lookup은 내부 길의 라우트를 찾는다.
+func (d *Devnet) Lookup(host, path string) *Route {
+	return lookupIn(d.Routes, host, path)
+}
+
+// HasHost는 내부 길에 이 도메인이 있는지 (DNS 응답, 인증서 발급).
+func (d *Devnet) HasHost(host string) bool {
+	for i := range d.Routes {
+		if d.Routes[i].Host == host {
+			return true
+		}
+	}
+	return false
+}
+
+func (d *Devnet) validate() error {
+	if d.ListenPort < 1 || d.ListenPort > 65535 {
+		return fmt.Errorf("devnet: 잘못된 포트 %d", d.ListenPort)
+	}
+	addr, err := netip.ParseAddr(d.Address)
+	if err != nil || !addr.Is4() || !addr.IsPrivate() {
+		return fmt.Errorf("devnet: 잘못된 주소 %q", d.Address)
+	}
+	prefix := netip.PrefixFrom(addr, 24).Masked()
+	keys, ips := map[string]bool{}, map[string]bool{}
+	for _, p := range d.Peers {
+		k, err := base64.StdEncoding.DecodeString(p.PubKey)
+		if err != nil || len(k) != 32 || keys[p.PubKey] {
+			return fmt.Errorf("devnet: 잘못된 기기 키 %q", p.PubKey)
+		}
+		ip, err := netip.ParseAddr(p.IP)
+		if err != nil || !prefix.Contains(ip) || ip == addr || ips[p.IP] {
+			return fmt.Errorf("devnet: 잘못된 기기 주소 %q", p.IP)
+		}
+		keys[p.PubKey], ips[p.IP] = true, true
+	}
+	return validateRoutes(d.Routes)
 }
 
 // Validate는 Hub에서 받은 표를 검사한다 (잘못된 표로 기존 표를 덮어쓰지 않도록).
@@ -75,9 +174,19 @@ func (t *Table) Validate() error {
 	if !strings.HasPrefix(t.LoginURL, "https://") && !strings.HasPrefix(t.LoginURL, "http://") {
 		return fmt.Errorf("login_url 형식 오류")
 	}
+	if err := validateRoutes(t.Routes); err != nil {
+		return err
+	}
+	if t.Devnet != nil {
+		return t.Devnet.validate()
+	}
+	return nil
+}
+
+func validateRoutes(routes []Route) error {
 	seen := map[string]bool{}
-	for i := range t.Routes {
-		r := &t.Routes[i]
+	for i := range routes {
+		r := &routes[i]
 		r.Host = strings.ToLower(strings.TrimSuffix(r.Host, "."))
 		if r.Host == "" || strings.ContainsAny(r.Host, "/: ") {
 			return fmt.Errorf("잘못된 호스트: %q", r.Host)
@@ -107,7 +216,7 @@ func (t *Table) Validate() error {
 		}
 		switch r.Auth {
 		case "moat": // 이름을 바꾸기 전(Moat) Hub·저장된 표의 값 = 로그인 필요
-			t.Routes[i].Auth = "douve"
+			routes[i].Auth = "douve"
 		case "douve", "public", "hub":
 		default:
 			return fmt.Errorf("%s: 알 수 없는 정책 %q", r.Host, r.Auth)
@@ -156,9 +265,13 @@ func (t *Table) hasHost(host string) bool {
 
 // lookup은 도메인과 경로에 맞는 라우트 중 접두사가 가장 긴 것을 고른다.
 func (t *Table) lookup(host, path string) *Route {
+	return lookupIn(t.Routes, host, path)
+}
+
+func lookupIn(routes []Route, host, path string) *Route {
 	var best *Route
-	for i := range t.Routes {
-		r := &t.Routes[i]
+	for i := range routes {
+		r := &routes[i]
 		if r.Host != host || !r.matches(path) {
 			continue
 		}

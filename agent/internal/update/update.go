@@ -1,6 +1,7 @@
 // Package update는 Hub가 지시한 Agent 자동 업데이트를 수행한다.
-// 내려받은 파일의 SHA-256이 Hub가 (인증된 WebSocket으로) 알려준 값과 같을 때만 실행 파일을 교체하고,
-// 프로세스를 끝내 systemd(Restart=always)가 새 버전으로 다시 띄우게 한다.
+// Hub를 그대로 믿지 않는다: Hub가 함께 보낸 SHA256SUMS가 신뢰하는 키(공식 릴리스 키 또는 이 서버의
+// trusted-keys)로 서명되어 있고, 서명의 버전이 지시한 버전과 같고 지금보다 이전이 아니며, 내려받은 파일의
+// SHA-256이 그 목록과 같을 때만 실행 파일을 교체한다. 그래서 Hub가 뚫려도 서명 없는 프로그램을 심을 수 없다.
 package update
 
 import (
@@ -14,7 +15,10 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
+
+	"github.com/5sick/douve/agent/internal/sign"
 )
 
 const maxSize = 64 << 20
@@ -35,10 +39,52 @@ func StateDir() string {
 	return "/var/lib/douve-agent"
 }
 
-// Apply는 hubURL+path에서 새 바이너리를 받아 exe를 교체한다.
-func Apply(ctx context.Context, hubURL, path, wantSHA, exe, stateDir string) error {
-	if len(wantSHA) != 64 {
-		return fmt.Errorf("체크섬 형식 오류")
+// Release는 Hub의 업데이트 지시.
+type Release struct {
+	Version string // 새 버전
+	Path    string // 내려받을 경로 (/dl/douve-agent-linux-<arch>)
+	SHA256  string // Hub가 알려 준 체크섬 (서명된 목록과 같아야 함)
+	Sums    string // SHA256SUMS 원문
+	Sig     string // SHA256SUMS.minisig
+}
+
+// Verify는 서명을 확인하고 이 아키텍처 파일의 체크섬을 돌려준다.
+func Verify(keys []sign.PublicKey, r Release, arch, current string) (string, error) {
+	if r.Sig == "" {
+		return "", errors.New("서명 없는 릴리스는 받지 않습니다 (SHA256SUMS.minisig 없음)")
+	}
+	trusted, err := sign.Verify(keys, []byte(r.Sums), r.Sig)
+	if err != nil {
+		return "", fmt.Errorf("릴리스 서명 확인 실패: %w", err)
+	}
+	if v := sign.CommentField(trusted, "version"); v != r.Version {
+		return "", fmt.Errorf("서명된 버전(%s)과 지시한 버전(%s)이 다릅니다", v, r.Version)
+	}
+	if sign.Older(r.Version, current) {
+		return "", fmt.Errorf("이전 버전(%s → %s)으로는 바꾸지 않습니다", current, r.Version)
+	}
+	name := "douve-agent-linux-" + arch
+	for _, line := range strings.Split(r.Sums, "\n") {
+		f := strings.Fields(line)
+		if len(f) == 2 && strings.TrimPrefix(f[1], "*") == name && len(f[0]) == 64 {
+			if r.SHA256 != "" && r.SHA256 != f[0] {
+				return "", errors.New("Hub가 알려 준 체크섬이 서명된 목록과 다릅니다")
+			}
+			return f[0], nil
+		}
+	}
+	return "", fmt.Errorf("서명된 목록에 %s가 없습니다", name)
+}
+
+// Apply는 서명을 확인한 뒤 hubURL+path에서 새 바이너리를 받아 exe를 교체한다.
+func Apply(ctx context.Context, hubURL string, r Release, keys []sign.PublicKey, arch, current, exe, stateDir string) error {
+	wantSHA, err := Verify(keys, r, arch, current)
+	if err != nil {
+		return err
+	}
+	path := r.Path
+	if !strings.HasPrefix(path, "/dl/douve-agent-linux-") || strings.ContainsAny(path, "?#") || strings.Contains(path, "..") {
+		return errors.New("잘못된 다운로드 경로")
 	}
 	guardPath := filepath.Join(stateDir, "last-update.json")
 	if b, err := os.ReadFile(guardPath); err == nil {

@@ -1,4 +1,5 @@
 #include "auth/jwt.h"
+#include "util/json.h"
 
 #include <openssl/core_names.h>
 #include <openssl/evp.h>
@@ -14,10 +15,7 @@ namespace {
 
 std::optional<Json::Value> parseJson(const std::string& s) {
     Json::Value v;
-    Json::CharReaderBuilder b;
-    std::string errs;
-    std::istringstream in(s);
-    if (!Json::parseFromStream(b, in, &v, &errs))
+    if (!douve::parseJson(s, v))
         return std::nullopt;
     return v;
 }

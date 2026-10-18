@@ -45,6 +45,32 @@ void HubApp::startBackgroundTasks() {
             LOG_ERROR << "알림 평가 실패: " << e.what();
         }
     });
+    loop->runEvery(30.0, [this]() {
+        try {
+            tickAuditExport(now());
+        } catch (const std::exception& e) {
+            LOG_ERROR << "감사 기록 내보내기 실패: " << e.what();
+        }
+    });
+    // 외부 접속 검증: 한 시간마다 모든 서버 (입구 443이 안 열리거나 SSH가 열리면 알림)
+    loop->runEvery(3600.0, [this]() {
+        try {
+            for (const auto& n : listNodes(*db_))
+                if (live_.connected(n.id))
+                    verifyReach(n.id, nullptr);
+        } catch (const std::exception& e) {
+            LOG_ERROR << "외부 접속 검증 실패: " << e.what();
+        }
+    });
+    auto auditCheck = [this]() {
+        try {
+            checkAuditChain();
+        } catch (const std::exception& e) {
+            LOG_ERROR << "감사 기록 확인 실패: " << e.what();
+        }
+    };
+    loop->runAfter(300.0, auditCheck);
+    loop->runEvery(86400.0, auditCheck);
     // 자동 백업: 하루 하나(<상태 디렉터리>/backups/auto-YYYYMMDD.db), 7개 보관.
     // VACUUM은 DB 크기만큼 걸리니 이벤트 루프 밖에서.
     auto backup = [this]() {
@@ -159,6 +185,7 @@ void HubApp::tickAlerts(std::int64_t t) {
         return;
     std::map<std::int64_t, Conditions> desired;
     std::map<std::int64_t, std::string> names;
+    const auto current = openAlerts(*db_);
     for (const auto& n : listNodes(*db_)) {
         NodeView v;
         v.id = n.id;
@@ -170,6 +197,14 @@ void HubApp::tickAlerts(std::int64_t t) {
         if (settings_.features().monitoring)
             v.latest = live_.latest(n.id); // 끄면 디스크·메모리 알림도 없음
         v.inventory = live_.inventory(n.id);
+        auto& units = unitSeen_[n.id];
+        // 이미 열린 유닛 알림은 (Hub 재시작 뒤에도) 유예 없이 유지한다
+        for (const auto& a : current)
+            if (a.nodeId == n.id && a.rule.starts_with("unit:"))
+                units.try_emplace(a.rule.substr(5), UnitSeen{0, t});
+        if (v.inventory)
+            trackFailedUnits(units, *v.inventory, t);
+        v.units = units;
         names[n.id] = n.name;
         // 한 번도 접속한 적 없는 노드는 평가하지 않음
         if (!v.connected && !v.lastSeenAt)
@@ -186,7 +221,7 @@ void HubApp::tickAlerts(std::int64_t t) {
             desired[*s.nodeId].rules["service:" + s.name] =
                 "서비스 응답 없음: " + s.name + " (" + s.host + ", " + h->second.error + ")";
     }
-    auto actions = reconcile(openAlerts(*db_), desired);
+    auto actions = reconcile(current, desired);
     for (const auto& o : actions.open) {
         openAlert(*db_, o.nodeId, o.rule, o.message, t);
         notify(alertOpenText(names[o.nodeId], o.message));
@@ -228,6 +263,78 @@ void HubApp::notify(const std::string& text) {
                          << "): " << (r.ok ? "HTTP " + std::to_string(r.status) : r.error);
         });
     }
+}
+
+void HubApp::tickAuditExport(std::int64_t) {
+    for (const auto& c : listChannels(*db_))
+        if (sendsAudit(c))
+            sendAuditBatch(c.id);
+}
+
+void HubApp::sendAuditBatch(std::int64_t channelId) {
+    {
+        std::lock_guard lk(auditMu_);
+        if (!auditSending_.insert(channelId).second)
+            return; // 앞 묶음 응답 대기 중
+    }
+    auto release = [this, channelId]() {
+        std::lock_guard lk(auditMu_);
+        auditSending_.erase(channelId);
+    };
+    auto c = findChannel(*db_, channelId);
+    const std::string key = "audit.fwd." + std::to_string(channelId);
+    const auto saved = getSetting(*db_, key);
+    std::int64_t after = 0;
+    try {
+        after = saved ? std::stoll(*saved) : 0;
+    } catch (const std::exception&) {
+    }
+    constexpr int kBatch = 200;
+    auto rows = c && sendsAudit(*c) ? auditRowsAfter(*db_, after, kBatch) : std::vector<AuditRow>{};
+    // 해시가 아직 없는 행(다른 프로세스가 쓰는 중)은 다음 차례에
+    while (!rows.empty() && rows.back().hash.empty())
+        rows.pop_back();
+    for (std::size_t i = 0; i < rows.size(); ++i)
+        if (rows[i].hash.empty()) {
+            rows.resize(i);
+            break;
+        }
+    if (rows.empty())
+        return release();
+    const std::int64_t last = rows.back().id;
+    const bool more = rows.size() == kBatch;
+    httpPostAsync(auditRequest(*c, rows, auditHashAt(*db_, after), now()),
+                  [this, channelId, key, last, more, release, name = c->name](HttpResult r) {
+                      release();
+                      if (!r.ok || r.status < 200 || r.status >= 300) {
+                          LOG_WARN
+                              << "감사 기록 내보내기 실패 (" << name
+                              << "): " << (r.ok ? "HTTP " + std::to_string(r.status) : r.error);
+                          return;
+                      }
+                      try {
+                          putSetting(*db_, key, std::to_string(last), now());
+                          if (more) // 밀린 기록은 이어서
+                              sendAuditBatch(channelId);
+                      } catch (const std::exception& e) {
+                          LOG_ERROR << "감사 기록 내보내기 상태 저장 실패: " << e.what();
+                      }
+                  });
+}
+
+void HubApp::checkAuditChain() {
+    const auto c = verifyAuditChain(*db_);
+    if (c.ok) {
+        LOG_INFO << "감사 기록 체인 확인: " << c.rows << "건 정상";
+        return;
+    }
+    LOG_ERROR << "감사 기록 체인이 끊김: #" << c.brokenAt;
+    const std::string at = std::to_string(c.brokenAt);
+    if (getSetting(*db_, "audit.broken_reported") == at)
+        return;
+    putSetting(*db_, "audit.broken_reported", at, now());
+    notify("🚨 감사 기록이 바뀌었거나 지워졌습니다 (#" + at +
+           "부터 해시 체인 불일치). douve-hub audit-verify로 확인하세요");
 }
 
 } // namespace douve

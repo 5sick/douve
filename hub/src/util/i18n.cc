@@ -1,4 +1,5 @@
 #include "util/i18n.h"
+#include "util/json.h"
 
 #include "assets.h"
 
@@ -122,10 +123,7 @@ std::vector<Piece> split(const std::string& k) {
 std::shared_ptr<const Dictionary> build(const std::string& json) {
     auto d = std::make_shared<Dictionary>();
     Json::Value root;
-    Json::CharReaderBuilder b;
-    std::string errs;
-    std::istringstream in(json);
-    if (!Json::parseFromStream(b, in, &root, &errs) || !root.isObject())
+    if (!parseJson(json, root) || !root.isObject())
         return d;
     for (const auto& k : root.getMemberNames()) {
         if (k.empty() || k[0] == '_' || !root[k].isString())

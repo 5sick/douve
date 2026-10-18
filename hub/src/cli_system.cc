@@ -1,5 +1,6 @@
 #include "cli_system.h"
 #include "cli_i18n.h"
+#include "util/json.h"
 
 #include "config.h"
 #include "settings.h"
@@ -123,10 +124,8 @@ int runConfigure(const std::vector<std::string>& args) {
             Database db(cfg->databasePath);
             if (!features.empty()) {
                 Json::Value v;
-                Json::CharReaderBuilder rb;
-                std::istringstream in(features);
                 std::string err;
-                if (!Json::parseFromStream(rb, in, &v, &err) || !v.isObject()) {
+                if (!parseJson(features, v, &err) || !v.isObject()) {
                     std::cerr << T("--features JSON 오류: ") << err << "\n";
                     return 2;
                 }

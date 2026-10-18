@@ -26,6 +26,10 @@ struct Service {
     std::string hostHeader;       // 비우면 원래 도메인 유지
     int timeout = 0;              // 첫 응답까지 초 (0 = 제한 없음)
     std::string origin = "web";   // 만든 곳: web | node (douve-agent expose)
+    // 두 개의 길: 내부(Douve 기기 WireGuard로 연결된 사용자만) / 외부(인터넷 공개 도메인). 하나
+    // 이상.
+    bool internal = false;
+    bool external = true;
     std::vector<std::string> publicPaths;
     std::int64_t createdAt = 0, updatedAt = 0;
     // 홈 화면

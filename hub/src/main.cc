@@ -1,4 +1,5 @@
 #include "app.h"
+#include "cli_audit.h"
 #include "cli_i18n.h"
 #include "cli_invite.h"
 #include "cli_recovery.h"
@@ -39,6 +40,8 @@ int main(int argc, char* argv[]) {
         return douve::runBackup({argv + 2, argv + argc});
     if (argc > 1 && std::string(argv[1]) == "restore")
         return douve::runRestore({argv + 2, argv + argc});
+    if (argc > 1 && std::string(argv[1]) == "audit-verify")
+        return douve::runAuditVerify({argv + 2, argv + argc});
     std::string error;
     auto opts = douve::parseOptions({argv + 1, argv + argc}, error);
     if (!opts) {
@@ -92,6 +95,19 @@ int main(int argc, char* argv[]) {
         // 업로드 기능은 쓰지 않지만 Drogon이 시작 시 폴더를 만든다 → 쓰기 가능한 /tmp 아래로
         // (systemd PrivateTmp)
         .setUploadPath((std::filesystem::temp_directory_path() / "douve-uploads").string())
+        // 처리 중 예외: JSON 값의 형식이 틀린 요청(예: 문자열 자리에 객체)은 400, 그 밖은 500.
+        // 내부 오류 문구는 응답에 넣지 않는다.
+        .setExceptionHandler([](const std::exception& e, const drogon::HttpRequestPtr& req,
+                                std::function<void(const drogon::HttpResponsePtr&)>&& cb) {
+            const bool badInput = dynamic_cast<const Json::Exception*>(&e) != nullptr;
+            if (!badInput)
+                LOG_ERROR << "요청 처리 실패 " << req->path() << ": " << e.what();
+            Json::Value v;
+            v["error"] = badInput ? "요청 형식이 올바르지 않습니다" : "서버 오류";
+            auto r = drogon::HttpResponse::newHttpJsonResponse(v);
+            r->setStatusCode(badInput ? drogon::k400BadRequest : drogon::k500InternalServerError);
+            cb(r);
+        })
         .run();
     return 0;
 }

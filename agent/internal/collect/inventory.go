@@ -20,12 +20,14 @@ import (
 
 // Inventory는 Hub에 60초마다 보내는 구성 정보다.
 type Inventory struct {
-	Type        string      `json:"type"`
-	System      System      `json:"system"`
-	FailedUnits []string    `json:"failed_units"`
-	Containers  []Container `json:"containers"`
-	WireGuard   []WGPeer    `json:"wireguard"`
-	Ports       []Port      `json:"ports"`
+	Type        string   `json:"type"`
+	System      System   `json:"system"`
+	FailedUnits []string `json:"failed_units"`
+	// FailedUnits 중 타이머로 실행되는 유닛 (한 번 실패는 다음 실행에서 풀리는 경우가 많다)
+	TimerUnits []string    `json:"timer_units"`
+	Containers []Container `json:"containers"`
+	WireGuard  []WGPeer    `json:"wireguard"`
+	Ports      []Port      `json:"ports"`
 	// 웹 터미널로 열 수 있는 계정
 	TerminalUsers []string `json:"terminal_users"`
 }
@@ -95,10 +97,11 @@ func NewInventoryCollector() *InventoryCollector {
 }
 
 func (c *InventoryCollector) Collect(ctx context.Context) Inventory {
-	inv := Inventory{Type: "inventory", FailedUnits: []string{}, Containers: []Container{},
+	inv := Inventory{Type: "inventory", FailedUnits: []string{}, TimerUnits: []string{}, Containers: []Container{},
 		WireGuard: []WGPeer{}, Ports: []Port{}}
 	inv.System = readSystem(c.Proc)
 	inv.FailedUnits = failedUnits(ctx)
+	inv.TimerUnits = timerTriggered(ctx, inv.FailedUnits)
 	if cs, err := dockerContainers(ctx, c.DockerSocket); err == nil {
 		inv.Containers = cs
 		inv.System.Docker = true
@@ -219,6 +222,51 @@ func parseFailedUnits(s string) []string {
 		}
 		if name != "" {
 			out = append(out, name)
+		}
+	}
+	return out
+}
+
+// timerTriggered는 units 중 .timer가 실행하는 유닛만 돌려준다.
+func timerTriggered(ctx context.Context, units []string) []string {
+	out := []string{}
+	if len(units) == 0 {
+		return out
+	}
+	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
+	defer cancel()
+	args := append([]string{"show", "-p", "Id", "-p", "TriggeredBy", "--"}, units...)
+	b, err := exec.CommandContext(ctx, "systemctl", args...).Output()
+	if err != nil {
+		return out
+	}
+	return parseTimerTriggered(string(b))
+}
+
+// parseTimerTriggered는 `systemctl show -p Id -p TriggeredBy` 출력(빈 줄로 나뉜 블록)을 읽는다.
+func parseTimerTriggered(s string) []string {
+	out := []string{}
+	for _, block := range strings.Split(s, "\n\n") {
+		var id string
+		timer := false
+		for _, line := range strings.Split(block, "\n") {
+			k, v, ok := strings.Cut(strings.TrimSpace(line), "=")
+			if !ok {
+				continue
+			}
+			switch k {
+			case "Id":
+				id = v
+			case "TriggeredBy":
+				for _, t := range strings.Fields(v) {
+					if strings.HasSuffix(t, ".timer") {
+						timer = true
+					}
+				}
+			}
+		}
+		if id != "" && timer {
+			out = append(out, id)
 		}
 	}
 	return out
@@ -351,6 +399,30 @@ func PublicListeners(proc string) []string {
 			continue
 		}
 		k := strconv.Itoa(p.Port) + " " + p.Process
+		if !seen[k] {
+			seen[k] = true
+			out = append(out, k)
+		}
+	}
+	return out
+}
+
+// ExposedListeners는 인터넷 쪽에서 닿을 수 있는 주소(0.0.0.0·::·공인 IP)에서 열린 포트다 ("포트 프로세스").
+// 루프백·사설망(WireGuard 등)에만 연 포트와 Agent 자신은 뺀다. 보안 점검표용.
+func ExposedListeners(proc string) []string {
+	seen := map[string]bool{}
+	var out []string
+	for _, p := range listeningPorts(proc) {
+		if p.Process == "douve-agent" {
+			continue
+		}
+		if p.Address != "0.0.0.0" && p.Address != "::" {
+			ip := net.ParseIP(p.Address)
+			if ip == nil || ip.IsLoopback() || ip.IsPrivate() || ip.IsLinkLocalUnicast() || ip.IsUnspecified() {
+				continue
+			}
+		}
+		k := strings.TrimSpace(strconv.Itoa(p.Port) + " " + p.Process)
 		if !seen[k] {
 			seen[k] = true
 			out = append(out, k)

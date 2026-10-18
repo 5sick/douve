@@ -66,6 +66,7 @@ std::string usage() {
              "       douve-hub invite --help       (초대 링크: 패스키로 사용자 추가)\n"
              "       douve-hub recovery-codes --help  (비상용 일회용 복구 코드)\n"
              "       douve-hub backup --help / restore --help  (DB·설정 백업과 복원)\n"
+             "       douve-hub audit-verify  (감사 기록 해시 체인 확인)\n"
              "  --config   설정 파일 (예: /etc/douve/hub.json)\n"
              "  --listen   수신 주소 (설정 파일 값보다 우선, 기본 127.0.0.1:8700)\n");
 }

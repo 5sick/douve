@@ -47,3 +47,16 @@ TEST(config_reject_invalid) {
     CHECK(parseConfig(R"({"public_url":"http://localhost:8700","cookie_domain":"localhost"})", err)
               .has_value());
 }
+
+TEST(config_wrong_types_are_errors_not_crashes) {
+    // 퍼징으로 찾은 입력: "google"이 객체가 아니라 배열이면 jsoncpp가 예외를 던졌다
+    std::string err;
+    CHECK(!parseConfig(
+        R"({"public_url":"https://d.example.com","cookie_domain":"example.com","google":["1.1"]})",
+        err));
+    CHECK(err.find("형식") != std::string::npos);
+    CHECK(!parseConfig(
+        R"({"public_url":"https://d.example.com","cookie_domain":"example.com","telegram":"x"})",
+        err));
+    CHECK(!parseConfig(R"({"public_url":["x"],"cookie_domain":"example.com"})", err));
+}

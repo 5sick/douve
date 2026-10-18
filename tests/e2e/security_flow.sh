@@ -36,7 +36,7 @@ for _ in $(seq 50); do curl -sf "$BASE/healthz" >/dev/null && break; sleep 0.1; 
 python3 - "$DIR/hub.db" <<'PY'
 import hashlib, sqlite3, sys, time
 db = sqlite3.connect(sys.argv[1]); now = int(time.time())
-db.execute("INSERT INTO users (id, email, created_at, allowed) VALUES (1, 'me@example.com', ?, 1)", (now,))
+db.execute("INSERT INTO users (id, email, created_at, allowed, role) VALUES (1, 'me@example.com', ?, 1, 'admin')", (now,))
 db.execute("INSERT INTO sessions VALUES (?, 1, 'passkey', ?, ?, ?, ?, ?, '', '', '')",
            (hashlib.sha256(b"sec-fresh-session-0123456789abcdef").digest(), now, now, now + 3600, now + 7200, now))
 db.commit()
@@ -110,8 +110,8 @@ jl sshd-session "Accepted publickey for root from 203.0.113.9 port 1 ssh2: ED255
 sleep 1.5
 after=$(sqlite3 "$DIR/hub.db" "SELECT count(*) FROM security_events WHERE kind='ssh_login'")
 [ "$before" = "$after" ] && ok "SSH 감시를 끄면 보고하지 않음" || bad "SSH 끄기 ($before → $after)"
-out=$(post /api/terminal/ticket "{\"node_id\":1,\"user\":\"$ME\"}")
-echo "$out" | python3 -c 'import json,sys; assert "꺼져" in json.load(sys.stdin)["error"]' && ok "웹 터미널을 끄면 티켓 거부" || bad "터미널 끄기 ($out)"
+out=$(post /api/terminal/options "{\"node_id\":1,\"user\":\"$ME\"}")
+echo "$out" | python3 -c 'import json,sys; assert "꺼져" in json.load(sys.stdin)["error"]' && ok "웹 터미널을 끄면 열기 요청 거부" || bad "터미널 끄기 ($out)"
 
 echo "$PASS passed, $FAIL failed"
 [ "$FAIL" = 0 ]

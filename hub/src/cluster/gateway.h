@@ -28,6 +28,14 @@ class AgentGateway : public drogon::WebSocketController<AgentGateway, false> {
                           const drogon::WebSocketMessageType& type) override;
     void handleConnectionClosed(const drogon::WebSocketConnectionPtr& conn) override;
 
+  private:
+    // 위 세 진입점은 예외를 잡아 해당 접속만 끊는다 (이벤트 루프 밖으로 새면 Hub 전체가 죽는다).
+    void onConnect(const drogon::HttpRequestPtr& req, const drogon::WebSocketConnectionPtr& conn);
+    void onMessage(const drogon::WebSocketConnectionPtr& conn, std::string&& message,
+                   const drogon::WebSocketMessageType& type);
+    void onClosed(const drogon::WebSocketConnectionPtr& conn);
+
+  public:
     // 노드 삭제 시 접속을 끊는다.
     void disconnect(std::int64_t nodeId);
     // 인증된 Agent에 메시지 전송. 접속 중이 아니면 false.

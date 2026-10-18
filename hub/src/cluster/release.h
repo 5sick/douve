@@ -11,6 +11,8 @@ namespace douve {
 struct AgentRelease {
     std::string version;
     std::map<std::string, std::string> sha256; // arch(amd64/arm64) → 체크섬
+    std::string sums;                          // SHA256SUMS 원문 (서명 대상)
+    std::string signature; // SHA256SUMS.minisig (없으면 빈 값 → Agent가 업데이트 거부)
 };
 
 std::optional<AgentRelease> loadAgentRelease(const std::string& dir);

@@ -29,17 +29,31 @@
 
   <h2>사람 초대</h2>
   <form class="card stack" id="invite-form">
-    <p class="meta">초대 링크를 연 사람은 패스키를 만들고 바로 이 Douve에 로그인합니다. 내 새 기기를 추가할 때도 쓸 수 있습니다.
-      링크는 24시간 동안 한 번만 쓸 수 있습니다.</p>
+    <p class="meta">초대 링크를 연 사람은 패스키를 만들고 바로 이 Douve에 로그인합니다. 내 새 기기를 추가할 때도 쓸 수 있습니다
+      (이미 있는 사람의 역할은 바뀌지 않습니다). 링크는 24시간 동안 한 번만 쓸 수 있습니다.</p>
     <label class="field">이메일 (사용자 이름으로 쓰임)
       <input id="invite-email" type="email" required autocomplete="off" placeholder="name@example.com">
     </label>
+    <label class="field">역할
+      <select id="invite-role">
+        <option value="app">앱만 — 허락한 앱에만 로그인</option>
+        <option value="operator">운영자 — 허락한 서버 보기·터미널·서비스 관리</option>
+        <option value="admin">관리자 — 전부 (설정·사용자 포함)</option>
+      </select>
+    </label>
+    <div class="stack" id="invite-access"></div>
     <div class="row end"><button class="primary" id="invite-create">초대 링크 만들기</button></div>
     <div id="invite-result" class="stack" hidden>
       <pre class="cmd" id="invite-link"></pre>
       <div class="row end"><button type="button" class="small" id="invite-copy">복사</button></div>
     </div>
   </form>
+
+  <h2>사용자</h2>
+  <div class="card stack">
+    <p class="meta">역할과 권한은 바로 적용됩니다. 설정 파일(hub.json)의 allowed_emails에 있는 사람은 항상 관리자입니다.</p>
+    <ul class="list" id="users"></ul>
+  </div>
 
   <h2>기능</h2>
   <div class="card stack" id="features">
@@ -54,6 +68,20 @@
     <label class="check"><input type="checkbox" data-f="security.files"> 중요 파일 변경 (authorized_keys·sudoers·sshd 설정 등)</label>
     <label class="check"><input type="checkbox" data-f="security.ports"> 새로 열린 포트</label>
   </div>
+
+  <h2>내부 길 (내 기기 WireGuard)</h2>
+  <form class="card stack" id="devnet-form">
+    <p class="meta">입구 서버가 내 폰·PC용 WireGuard를 엽니다. 연결된 기기에서는 "내부 길"을 켠 서비스가 평소 주소 그대로,
+      로그인 화면 없이 그 사람 권한대로 열립니다. 기기는 계정 화면에서 등록합니다.</p>
+    <label class="check"><input type="checkbox" id="devnet-on"> 내부 길 켜기</label>
+    <div class="row">
+      <label class="field">UDP 포트 <input id="devnet-port" type="number" min="1024" max="65535"></label>
+      <label class="field">기기가 접속할 주소 <input id="devnet-endpoint" autocomplete="off"></label>
+    </div>
+    <p class="meta" id="devnet-help"></p>
+    <div class="meta" id="devnet-state"></div>
+    <div class="row end"><button class="primary" id="devnet-save">저장</button></div>
+  </form>
 
   <h2>노드에서 서비스 공개</h2>
   <div class="card stack">
@@ -105,6 +133,7 @@
         </div>
         <label class="field" id="ch-url-box">웹훅 주소 <input id="ch-url" autocomplete="off" placeholder="https://…"></label>
         <label class="field" id="ch-secret-box">서명 비밀값 (선택) <input id="ch-secret" autocomplete="off"></label>
+        <label class="check" id="ch-audit-box"><input type="checkbox" id="ch-audit"> 감사 기록도 보내기 (변조 방지용 사본)</label>
         <p class="meta" id="ch-help"></p>
         <div class="row end"><button class="primary">추가</button></div>
       </form>

@@ -116,6 +116,9 @@ type Manager struct {
 	certs     *certSource
 	log       *slog.Logger
 
+	// 내부 길(기기 WireGuard)을 맡는 쪽. 표가 바뀔 때마다 호출 (Hub 접속 전 저장된 표 포함)
+	devnet func(*Devnet)
+
 	mu       sync.Mutex
 	servers  []*http.Server
 	starting bool
@@ -135,8 +138,8 @@ func NewManager(cfg *Config, stateDir string, log *slog.Logger) *Manager {
 			Prompt: autocert.AcceptTOS,
 			Cache:  autocert.DirCache(filepath.Join(stateDir, "acme")),
 			HostPolicy: func(_ context.Context, host string) error {
-				if t := m.handler.Table(); t != nil && !t.Disabled && t.hasHost(host) {
-					return nil
+				if t := m.handler.Table(); t != nil && !t.Disabled && (t.hasHost(host) || (t.Devnet != nil && t.Devnet.HasHost(host))) {
+					return nil // 내부 전용 도메인도 공개 입구에서 ACME 검증을 받는다 (내용은 내부에서만)
 				}
 				return fmt.Errorf("등록되지 않은 도메인: %s", host)
 			},
@@ -172,11 +175,29 @@ func (m *Manager) Apply(t *Table) error {
 	return nil
 }
 
+// OnDevnet은 내부 길 설정이 바뀔 때 부를 함수를 정한다 (Start·Apply 전에).
+func (m *Manager) OnDevnet(f func(*Devnet)) { m.devnet = f }
+
+// Handler는 입구의 프록시다 (내부 길도 같은 프록시·터널을 쓴다).
+func (m *Manager) Handler() *Handler { return m.handler }
+
+// GetCertificate는 입구의 인증서 (내부 길 HTTPS도 같은 인증서).
+func (m *Manager) GetCertificate(hello *tls.ClientHelloInfo) (*tls.Certificate, error) {
+	return m.certs.GetCertificate(hello)
+}
+
 func (m *Manager) activate(t *Table) {
 	if m.certs.acme != nil && t.ACMEEmail != "" {
 		m.certs.acme.Email = t.ACMEEmail // 첫 계정 등록 전에만 의미가 있다
 	}
 	m.handler.SetTable(t)
+	if m.devnet != nil {
+		if t.Disabled {
+			m.devnet(nil)
+		} else {
+			m.devnet(t.Devnet)
+		}
+	}
 	if t.Disabled {
 		m.shutdown()
 		return

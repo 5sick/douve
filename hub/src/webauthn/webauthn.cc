@@ -1,4 +1,6 @@
 #include "webauthn/webauthn.h"
+#include "util/json.h"
+#include "webauthn/cbor_guard.h"
 
 #include "util/crypto.h"
 
@@ -20,27 +22,25 @@ using Item = std::unique_ptr<cbor_item_t, ItemDeleter>;
 bool checkClientData(const Bytes& raw, const char* expectedType, const Expectations& exp,
                      std::string& error) {
     Json::Value cd;
-    Json::CharReaderBuilder b;
-    std::string errs;
-    std::istringstream in(toString(raw));
-    if (raw.size() > 4096 || !Json::parseFromStream(b, in, &cd, &errs) || !cd.isObject()) {
+    if (raw.size() > 4096 || !parseJson(toString(raw), cd) || !cd.isObject()) {
         error = "clientDataJSON 형식 오류";
         return false;
     }
-    if (cd.get("type", "").asString() != expectedType) {
+    if (jsonStr(cd, "type") != expectedType) {
         error = "clientData type 불일치";
         return false;
     }
-    auto challenge = base64UrlDecode(cd.get("challenge", "").asString());
+    auto challenge = base64UrlDecode(jsonStr(cd, "challenge"));
     if (!challenge || exp.challenge.empty() || !constantTimeEquals(*challenge, exp.challenge)) {
         error = "challenge 불일치";
         return false;
     }
-    if (cd.get("origin", "").asString() != exp.origin) {
-        error = "origin 불일치: " + cd.get("origin", "").asString();
+    if (jsonStr(cd, "origin") != exp.origin) {
+        error = "origin 불일치: " + jsonStr(cd, "origin");
         return false;
     }
-    if (cd.get("crossOrigin", false).asBool()) {
+    // 없으면 false, 불리언이 아닌 값이 오면 거부 쪽으로
+    if (jsonBool(cd, "crossOrigin", cd.isMember("crossOrigin"))) {
         error = "crossOrigin 요청 거부";
         return false;
     }
@@ -104,6 +104,10 @@ std::optional<AuthData> parseAuthData(const Bytes& raw, std::string& error) {
         pos += used;
     }
     if (ad.flags & kFlagED) {
+        if (!cborWithinBounds(raw.data() + pos, raw.size() - pos)) {
+            error = "확장 데이터 CBOR 오류";
+            return std::nullopt;
+        }
         cbor_load_result res{};
         Item ext(cbor_load(raw.data() + pos, raw.size() - pos, &res));
         if (!ext || res.error.code != CBOR_ERR_NONE || !cbor_isa_map(ext.get())) {
@@ -125,6 +129,10 @@ std::optional<NewCredential> verifyRegistration(const Bytes& clientDataJson,
     if (!checkClientData(clientDataJson, "webauthn.create", exp, error))
         return std::nullopt;
 
+    if (!cborWithinBounds(attestationObject.data(), attestationObject.size())) {
+        error = "attestationObject CBOR 오류";
+        return std::nullopt;
+    }
     cbor_load_result res{};
     Item root(cbor_load(attestationObject.data(), attestationObject.size(), &res));
     if (!root || res.error.code != CBOR_ERR_NONE || !cbor_isa_map(root.get())) {

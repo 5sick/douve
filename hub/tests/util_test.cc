@@ -1,6 +1,7 @@
 #include "testing.h"
 #include "util/crypto.h"
 #include "util/encoding.h"
+#include "util/json.h"
 
 using namespace douve;
 
@@ -43,4 +44,23 @@ TEST(constant_time_equals) {
     CHECK(constantTimeEquals(Bytes{1, 2, 3}, Bytes{1, 2, 3}));
     CHECK(!constantTimeEquals(Bytes{1, 2, 3}, Bytes{1, 2, 4}));
     CHECK(!constantTimeEquals(Bytes{1, 2}, Bytes{1, 2, 3}));
+}
+
+TEST(json_parse_never_throws) {
+    Json::Value v;
+    CHECK(parseJson(R"({"a":"x","n":3,"b":true})", v));
+    CHECK_EQ(jsonStr(v, "a"), "x");
+    CHECK_EQ(jsonInt(v, "n"), 3);
+    CHECK(jsonBool(v, "b"));
+    // 형식이 다르면 기본값 (asString은 예외를 던진다)
+    CHECK(parseJson(R"({"a":[1],"n":"3","b":"yes"})", v));
+    CHECK_EQ(jsonStr(v, "a", "d"), "d");
+    CHECK_EQ(jsonInt(v, "n", -1), -1);
+    CHECK(!jsonBool(v, "b"));
+    CHECK_EQ(jsonStr(Json::Value(Json::arrayValue), "a"), "");
+    // 깊은 중첩·깨진 입력은 예외 없이 실패
+    CHECK(!parseJson(std::string(100000, '['), v));
+    CHECK(v.isNull());
+    CHECK(!parseJson("{\"a\":", v));
+    CHECK(!parseJson("", v));
 }

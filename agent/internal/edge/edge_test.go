@@ -40,6 +40,10 @@ func fakeHub(t *testing.T, calls *atomic.Int32) *httptest.Server {
 		calls.Add(1)
 		c, err := r.Cookie(sessionCookie)
 		if err == nil && c.Value == goodToken {
+			if r.URL.Query().Get("service") == "7" { // 이 앱은 권한 없음
+				w.WriteHeader(http.StatusForbidden)
+				return
+			}
 			w.Header().Set("X-Douve-User", "me@example.com")
 			w.WriteHeader(http.StatusOK)
 			return
@@ -89,6 +93,8 @@ func setup(t *testing.T) (*Handler, *httptest.Server, *atomic.Int32, *httptest.S
 			{Host: "app.example.com", Upstream: strings.TrimPrefix(up.URL, "http://"), Auth: "douve",
 				PublicPaths: []string{"/api/push/", "/status"}},
 			{Host: "open.example.com", Upstream: strings.TrimPrefix(up.URL, "http://"), Auth: "public"},
+			{ID: 7, Host: "secret.example.com", Upstream: strings.TrimPrefix(up.URL, "http://"), Auth: "douve"},
+			{ID: 8, Host: "mine.example.com", Upstream: strings.TrimPrefix(up.URL, "http://"), Auth: "douve"},
 			{Host: "douve.example.com", Upstream: strings.TrimPrefix(up.URL, "http://"), Auth: "hub"},
 		},
 	}
@@ -528,5 +534,37 @@ func TestLegacyMoatPolicy(t *testing.T) {
 	}
 	if tb.Routes[0].Auth != "douve" {
 		t.Fatalf("이전 이름의 정책은 로그인 필요로: %q", tb.Routes[0].Auth)
+	}
+}
+
+func TestPerAppPermission(t *testing.T) {
+	_, srv, _, _ := setup(t)
+	ck := map[string]string{"Cookie": sessionCookie + "=" + goodToken}
+	// 로그인은 했지만 이 앱 권한이 없으면 로그인 화면이 아니라 403 (다시 로그인해도 같으니까)
+	resp, body := get(t, srv, "secret.example.com", "/", ck)
+	if resp.StatusCode != http.StatusForbidden || body != nil {
+		t.Fatalf("권한 없는 앱: %d %v", resp.StatusCode, body)
+	}
+	// 권한 있는 앱은 서비스 id와 함께 확인되어 통과
+	resp, body = get(t, srv, "mine.example.com", "/", ck)
+	if resp.StatusCode != http.StatusOK || body["user"] != "me@example.com" {
+		t.Fatalf("권한 있는 앱: %d %v", resp.StatusCode, body)
+	}
+	// 로그인 안 했으면 여전히 로그인 화면으로
+	if resp, _ := get(t, srv, "secret.example.com", "/", nil); resp.StatusCode != http.StatusFound {
+		t.Fatalf("로그인 전: %d", resp.StatusCode)
+	}
+}
+
+func TestRouteVerifyURL(t *testing.T) {
+	r := Route{ID: 12}
+	if got := r.verifyURL("http://hub/auth/verify"); got != "http://hub/auth/verify?service=12" {
+		t.Fatal(got)
+	}
+	if got := r.verifyURL("http://hub/auth/verify?x=1"); got != "http://hub/auth/verify?x=1&service=12" {
+		t.Fatal(got)
+	}
+	if got := (&Route{}).verifyURL("http://hub/v"); got != "http://hub/v" {
+		t.Fatal(got)
 	}
 }

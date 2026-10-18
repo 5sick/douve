@@ -46,7 +46,13 @@
     </details>
   </section>
 
-  <h2>공개한 서비스</h2>
+  <div class="row"><h2>서비스</h2>
+    <div class="chips" id="svc-filter">
+      <button type="button" class="chip on" data-f="all">전체</button>
+      <button type="button" class="chip" data-f="internal">내부 길</button>
+      <button type="button" class="chip" data-f="external">외부 공개</button>
+    </div>
+  </div>
   <ul class="list" id="services"></ul>
 
   <dialog id="svc-dialog">
@@ -67,8 +73,14 @@
       <label class="field">도메인
         <input id="svc-host" placeholder="예: kuma.example.com" autocomplete="off" required>
       </label>
+      <fieldset class="field" id="svc-ways">
+        <legend>길</legend>
+        <label class="check"><input type="checkbox" id="svc-internal"> 내부 길 — 등록한 내 기기(WireGuard)에서만, 로그인 없이 권한대로</label>
+        <label class="check"><input type="checkbox" id="svc-external"> 외부 공개 — 인터넷에서 이 도메인으로</label>
+        <div class="meta" id="svc-ways-help"></div>
+      </fieldset>
       <fieldset class="field radios" id="svc-auth-box">
-        <legend>접근</legend>
+        <legend>외부에서의 접근</legend>
         <label><input type="radio" name="svc-auth" value="douve" checked> Douve 로그인 필요</label>
         <label><input type="radio" name="svc-auth" value="public"> 누구나 (공개)</label>
       </fieldset>

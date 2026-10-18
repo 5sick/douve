@@ -9,6 +9,7 @@
 #include "store/passkeys.h"
 #include "store/repo.h"
 #include "util/crypto.h"
+#include "util/json.h"
 #include "webauthn/webauthn.h"
 
 #include <drogon/drogon.h>
@@ -58,7 +59,7 @@ std::optional<Json::Value> takeChallenge(Database& db, const std::string& id,
     if (!payload)
         return std::nullopt;
     Json::Value p;
-    if (!Json::Reader().parse(*payload, p) || p["purpose"].asString() != purpose)
+    if (!parseJson(*payload, p) || jsonStr(p, "purpose") != purpose)
         return std::nullopt;
     return p;
 }
@@ -362,6 +363,10 @@ void HubApp::registerPasskeyRoutes() {
                 audit(*db_, userId, "passkey_register_failed", clientIp(req), "invite: " + err, t);
                 return cb(error(drogon::k400BadRequest, "패스키 등록 실패: " + err));
             }
+            // 이미 들어올 수 있던 사람(내 새 기기 추가)은 역할을 바꾸지 않는다 — 역할은 사용자
+            // 관리에서
+            const bool existing =
+                !listPasskeys(*db_, userId).empty() || userAllowed(*db_, user->email);
             if (!consumeInvite(*db_, token, t))
                 return cb(
                     error(drogon::k409Conflict, "초대 링크가 이미 사용되었거나 만료되었습니다"));
@@ -380,7 +385,15 @@ void HubApp::registerPasskeyRoutes() {
             if (!insertPasskey(*db_, pk))
                 return cb(error(drogon::k409Conflict, "이미 등록된 패스키입니다"));
             setUserAllowed(*db_, userId, true);
-            audit(*db_, userId, "invite_accepted", clientIp(req), user->email + " " + name, t);
+            // 새 사용자는 초대할 때 정한 역할·권한으로
+            std::string role = roleName(loadAccess(*db_, userId).role);
+            if (!existing) {
+                auto acc = inviteAccess(*db_, token).value_or(InviteAccess{Role::App, {}, {}});
+                setAccess(*db_, userId, acc.role, acc.nodes, acc.services);
+                role = roleName(acc.role);
+            }
+            audit(*db_, userId, "invite_accepted", clientIp(req),
+                  user->email + " " + name + " role=" + role, t);
             Json::Value v;
             v["ok"] = true;
             auto r = json(v);

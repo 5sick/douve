@@ -28,6 +28,12 @@ if [ -f "$DIST/SHA256SUMS" ] && [ -f "$DIST/VERSION" ]; then
   for f in douve-agent-linux-amd64 douve-agent-linux-arm64 SHA256SUMS VERSION; do
     install -m 0644 -o root -g root "$DIST/$f" "/usr/local/share/douve/agent/$f"
   done
+  if [ -f "$DIST/SHA256SUMS.minisig" ]; then
+    install -m 0644 -o root -g root "$DIST/SHA256SUMS.minisig" /usr/local/share/douve/agent/SHA256SUMS.minisig
+  else
+    rm -f /usr/local/share/douve/agent/SHA256SUMS.minisig
+    echo "  ! 서명 없음 (SHA256SUMS.minisig) — Agent는 서명 없는 업데이트를 받지 않습니다"
+  fi
   echo "  $(cat "$DIST/VERSION") 설치 — 접속 중인 Agent는 자동으로 이 버전으로 업데이트됨"
 else
   echo "  dist/ 없음 — 건너뜀 (make agent 후 다시 실행하면 설치됨)"

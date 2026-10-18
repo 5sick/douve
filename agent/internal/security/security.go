@@ -22,6 +22,7 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"unicode/utf8"
 )
 
 // Event는 Hub로 보내는 사건 하나다.
@@ -185,6 +186,7 @@ func (c *Collector) fromJournal(ctx context.Context) []Event {
 		}
 		msg, _ := e["MESSAGE"].(string)
 		id, _ := e["SYSLOG_IDENTIFIER"].(string)
+		id = truncate(id, 64) // 로그를 남기는 쪽이 정할 수 있는 값
 		if cur, ok := e["__CURSOR"].(string); ok {
 			c.cursor = cur
 		}
@@ -247,9 +249,13 @@ func (c *Collector) fromJournal(ctx context.Context) []Event {
 	return events
 }
 
+// truncate는 s를 n바이트 이하로 자른다 (UTF-8 글자 중간에서 자르지 않는다).
 func truncate(s string, n int) string {
 	if len(s) <= n {
 		return s
+	}
+	for n > 0 && !utf8.RuneStart(s[n]) {
+		n--
 	}
 	return s[:n] + "…"
 }

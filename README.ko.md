@@ -24,7 +24,8 @@ SSH 설정을 따로따로 붙이게 됩니다. 설정도 로그인도 제각각
 
 - **모든 앱 앞에 패스키 로그인** — 자체 로그인이 없는 앱도. 비밀번호는 어디에도 없습니다.
   Google 로그인은 선택.
-- **22번 포트를 닫으세요.** 브라우저 터미널은 열 때마다 패스키를 다시 확인하고(60초), 화면을
+- **22번 포트를 닫으세요.** 브라우저 터미널은 열 때마다 패스키로 서명하고 서버가 그 서명을 직접
+  확인하며(Hub가 뚫려도 혼자서는 못 엶), 화면을
   녹화하며, Ubuntu·Debian뿐 아니라 SELinux를 쓰는 Rocky/RHEL에서도 동작합니다.
 - **내가 한 일인지 아는 보안 감시.** SSH 로그인·실패, 관리 계정이 아닌 `sudo`, 계정·중요 파일 변경
   (`authorized_keys`, `sudoers`, `sshd_config` 등), 새로 열린 포트. Douve 터미널에서 한 작업은 나로
@@ -42,6 +43,8 @@ SSH 설정을 따로따로 붙이게 됩니다. 설정도 로그인도 제각각
 - **모니터링:** CPU·메모리·디스크·네트워크, 실패한 systemd 유닛, 컨테이너, WireGuard 피어,
   서비스 응답 확인, 텔레그램 알림.
 - **홈 화면** (앱 아이콘이 있는 Homepage 스타일 시작 페이지).
+- **앱마다 내부·외부.** 폰·노트북을 QR로 등록하면(Douve가 직접 여는 WireGuard) 연결된 동안 "내부" 앱이 평소 주소
+  그대로 로그인 화면 없이 열리고, 인터넷에는 없습니다. 준비되면 스위치 하나로 외부에 공개.
 - **도메인이 없으면 Tailscale 모드:** 공개 포트 0개, Tailscale 계정으로 로그인.
 - **가볍습니다:** 정적 바이너리 두 개(Hub 약 12MB, Agent 약 9MB), SQLite, Docker 필요 없음.
   1GB VM에서 돌아갑니다. 한국어·영어 화면.
@@ -58,6 +61,8 @@ systemd를 쓰는 빈 리눅스 서버(Ubuntu, Debian, Rocky/RHEL; x86_64 또는
 ```sh
 curl -fsSL https://github.com/5sick/douve/releases/latest/download/install.sh | sudo sh
 ```
+
+릴리스는 서명되어 있고 설치기가 서명과 체크섬을 먼저 확인합니다 ([직접 확인하는 법](SECURITY.md#verifying-releases)).
 
 설치기가 몇 가지를 묻습니다 (Enter = 추천):
 

@@ -25,6 +25,16 @@ Delete the lost device's passkey on the Account page and generate new codes if f
 Signing in with a recovery code sends an alert — if it wasn't you, generate new codes immediately
 and log out other devices.
 
+### I can sign in again, but terminals say "unknown passkey"
+Servers only trust passkeys on their terminal trust list, and changes to that list need an admin
+passkey the servers already trust. A new passkey shows up on the Servers page as a change waiting
+for approval: approve it with an older admin passkey. If no admin passkey the servers trust is
+left (you lost every one), clear the list on each server — through the cloud console or
+private-network SSH — and the next list from the Hub is accepted as on first install:
+```sh
+sudo douve-agent terminal-trust reset && sudo systemctl restart douve-agent
+```
+
 ### I have no recovery codes either (but I can get a shell on the Hub server)
 ```sh
 sudo douve-hub invite --email me@example.com          # link to register a new passkey (24 h)

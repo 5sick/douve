@@ -1,4 +1,5 @@
 #include "cluster/terminal.h"
+#include "util/json.h"
 
 #include "app.h"
 #include "cluster/gateway.h"
@@ -84,8 +85,8 @@ std::size_t TerminalGateway::activeCount() {
     return sessions_.size();
 }
 
-void TerminalGateway::handleNewConnection(const drogon::HttpRequestPtr& req,
-                                          const WebSocketConnectionPtr& conn) {
+void TerminalGateway::onConnect(const drogon::HttpRequestPtr& req,
+                                const WebSocketConnectionPtr& conn) {
     const auto t = HubApp::now();
     // CSRF: 다른 사이트가 사용자의 쿠키로 터미널 WebSocket을 열지 못하게
     if (req->getHeader("Origin") != hub_.config().origin())
@@ -97,12 +98,11 @@ void TerminalGateway::handleNewConnection(const drogon::HttpRequestPtr& req,
     if (!payload)
         return rejectBrowser(conn, "터미널 티켓이 없거나 만료되었습니다. 다시 여세요");
     Json::Value p;
-    Json::CharReaderBuilder rb;
-    std::istringstream in(*payload);
-    std::string err;
-    Json::parseFromStream(rb, in, &p, &err);
-    if (p.get("user_id", 0).asInt64() != sess->userId)
+    if (!parseJson(*payload, p) || jsonInt(p, "user_id") != sess->userId)
         return rejectBrowser(conn, "다른 사용자의 티켓입니다");
+    // 티켓을 받은 뒤 권한이 바뀌었을 수 있다
+    if (!hub_.access(*sess).node(jsonInt(p, "node_id")))
+        return rejectBrowser(conn, "이 서버의 권한이 없습니다");
 
     auto s = std::make_shared<Session>();
     s->sid = randomToken(12);
@@ -144,6 +144,8 @@ void TerminalGateway::handleNewConnection(const drogon::HttpRequestPtr& req,
     open["user"] = s->user;
     open["cols"] = cols;
     open["rows"] = rows;
+    // 사용자의 패스키 서명 (Agent가 신뢰 목록으로 직접 확인한 뒤에만 셸을 띄운다)
+    open["auth"] = p["auth"];
     if (!hub_.agents().send(s->nodeId, open))
         return finish(s, -1, "서버가 Douve에 접속해 있지 않습니다");
     audit(hub_.db(), s->userId, "terminal_opened", s->ip,
@@ -156,29 +158,26 @@ void TerminalGateway::handleNewConnection(const drogon::HttpRequestPtr& req,
     });
 }
 
-void TerminalGateway::handleNewMessage(const WebSocketConnectionPtr& conn, std::string&& message,
-                                       const drogon::WebSocketMessageType& type) {
+void TerminalGateway::onMessage(const WebSocketConnectionPtr& conn, std::string&& message,
+                                const drogon::WebSocketMessageType& type) {
     if (type != drogon::WebSocketMessageType::Text || message.size() > 128 * 1024)
         return;
     auto s = conn->getContext<Session>();
     if (!s || s->done)
         return;
     Json::Value m;
-    Json::CharReaderBuilder rb;
-    std::string err;
-    std::unique_ptr<Json::CharReader> reader(rb.newCharReader());
-    if (!reader->parse(message.data(), message.data() + message.size(), &m, &err))
+    if (!parseJson(message, m) || !m.isObject())
         return;
-    const std::string kind = m.get("t", "").asString();
+    const std::string kind = jsonStr(m, "t");
     Json::Value out;
     out["sid"] = s->sid;
     if (kind == "in") {
         out["type"] = "term_in";
-        out["data"] = m.get("d", "").asString();
+        out["data"] = jsonStr(m, "d");
     } else if (kind == "resize") {
         out["type"] = "term_resize";
-        out["cols"] = m.get("c", 80).asInt();
-        out["rows"] = m.get("r", 24).asInt();
+        out["cols"] = static_cast<int>(std::clamp<std::int64_t>(jsonInt(m, "c", 80), 1, 1000));
+        out["rows"] = static_cast<int>(std::clamp<std::int64_t>(jsonInt(m, "r", 24), 1, 1000));
         if (s->rec)
             s->rec->resize(out["cols"].asInt(), out["rows"].asInt(), elapsed(*s));
     } else {
@@ -187,7 +186,7 @@ void TerminalGateway::handleNewMessage(const WebSocketConnectionPtr& conn, std::
     hub_.agents().send(s->nodeId, out);
 }
 
-void TerminalGateway::handleConnectionClosed(const WebSocketConnectionPtr& conn) {
+void TerminalGateway::onClosed(const WebSocketConnectionPtr& conn) {
     auto s = conn->getContext<Session>();
     if (!s || s->done)
         return;
@@ -304,6 +303,34 @@ void TerminalGateway::purgeRecordings(std::int64_t olderThanUnix) {
                            std::time(nullptr);
         if (mtime < olderThanUnix)
             std::filesystem::remove(e.path(), ec);
+    }
+}
+
+void TerminalGateway::handleNewConnection(const drogon::HttpRequestPtr& req,
+                                          const WebSocketConnectionPtr& conn) {
+    try {
+        onConnect(req, conn);
+    } catch (const std::exception& e) {
+        LOG_WARN << "WebSocket 접속 처리 실패 terminal: " << e.what();
+        conn->forceClose();
+    }
+}
+
+void TerminalGateway::handleNewMessage(const WebSocketConnectionPtr& conn, std::string&& message,
+                                       const drogon::WebSocketMessageType& type) {
+    try {
+        onMessage(conn, std::move(message), type);
+    } catch (const std::exception& e) {
+        LOG_WARN << "WebSocket 메시지 처리 실패 terminal: " << e.what();
+        conn->forceClose();
+    }
+}
+
+void TerminalGateway::handleConnectionClosed(const WebSocketConnectionPtr& conn) {
+    try {
+        onClosed(conn);
+    } catch (const std::exception& e) {
+        LOG_WARN << "WebSocket 종료 처리 실패 terminal: " << e.what();
     }
 }
 

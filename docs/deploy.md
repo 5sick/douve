@@ -23,6 +23,13 @@ source checkout.
 The Hub listens on `127.0.0.1:8700` by default. Make one server the entry (Servers → Make entry)
 so its agent serves the Hub and your apps on 80/443, or put your own reverse proxy in front.
 
+## Internal path (device WireGuard)
+
+Settings → Internal path: turn it on and open the UDP port (default 51821) to the entry server in
+your cloud firewall. Then each person adds devices on the Account page (QR for the WireGuard app,
+or a config file). Mark services *internal*, *public* or both in the service dialog. Changing the
+port or the address devices connect to means registering devices again.
+
 ## Upgrades
 
 - **Hub:** replace `/usr/local/bin/douve-hub` and restart (`deploy/install-hub.sh` keeps the

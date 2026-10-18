@@ -75,6 +75,18 @@ TEST(webauthn_register_rejects_wrong_context) {
     // 빈 기대 challenge는 항상 실패
     auto r8 = a.create(Bytes{}, kOrigin, kRpId);
     CHECK(!verifyRegistration(r8.clientDataJson, r8.attestationObject, expect(Bytes{}), err));
+    // 형식이 틀린 clientData: 예외 없이 거부 (로그인 전 입력)
+    auto r9 = a.create(ch, kOrigin, kRpId);
+    for (std::string cd : {std::string(R"({"type":["webauthn.create"]})"),
+                           std::string(R"({"type":"webauthn.create","challenge":{},"origin":1})"),
+                           std::string(2000, '[') + std::string(2000, ']')}) {
+        r9.clientDataJson = toBytes(cd);
+        CHECK(!verifyRegistration(r9.clientDataJson, r9.attestationObject, expect(ch), err));
+    }
+    // crossOrigin이 불리언이 아니면 거부
+    r9.clientDataJson = toBytes(R"({"type":"webauthn.create","challenge":")" + base64UrlEncode(ch) +
+                                R"(","origin":")" + kOrigin + R"(","crossOrigin":"no"})");
+    CHECK(!verifyRegistration(r9.clientDataJson, r9.attestationObject, expect(ch), err));
 }
 
 TEST(webauthn_assertion_rejects_attacks) {

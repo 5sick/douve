@@ -1,5 +1,7 @@
 #include "cluster/gateway.h"
+#include "cluster/files.h"
 #include "util/i18n.h"
+#include "util/json.h"
 
 #include "app.h"
 #include "cluster/live.h"
@@ -38,8 +40,8 @@ void reject(const WebSocketConnectionPtr& conn, const std::string& why) {
 
 } // namespace
 
-void AgentGateway::handleNewConnection(const drogon::HttpRequestPtr& req,
-                                       const WebSocketConnectionPtr& conn) {
+void AgentGateway::onConnect(const drogon::HttpRequestPtr& req,
+                             const WebSocketConnectionPtr& conn) {
     auto ctx = std::make_shared<Ctx>();
     ctx->nonce = randomToken(32);
     ctx->ip = hub_.clientIp(req);
@@ -61,8 +63,8 @@ void AgentGateway::handleNewConnection(const drogon::HttpRequestPtr& req,
 
 void AgentGateway::onAuth(const WebSocketConnectionPtr& conn, Ctx& ctx, const Json::Value& msg) {
     const auto t = HubApp::now();
-    const std::int64_t nodeId = msg.get("node_id", 0).asInt64();
-    auto sig = base64UrlDecode(msg.get("sig", "").asString());
+    const std::int64_t nodeId = jsonInt(msg, "node_id");
+    auto sig = base64UrlDecode(jsonStr(msg, "sig"));
     auto node = nodeId > 0 ? findNode(hub_.db(), nodeId) : std::nullopt;
     if (!node || !sig || !ed25519Verify(node->pubkey, agentAuthMessage(ctx.nonce, nodeId), *sig)) {
         audit(hub_.db(), std::nullopt, "agent_auth_failed", ctx.ip, std::to_string(nodeId), t);
@@ -79,7 +81,7 @@ void AgentGateway::onAuth(const WebSocketConnectionPtr& conn, Ctx& ctx, const Js
     }
     if (old && old != conn)
         old->shutdown(drogon::CloseCode::kNormalClosure, "새 접속으로 대체됨");
-    touchNode(hub_.db(), nodeId, ctx.ip, msg.get("version", "").asString().substr(0, 32), t);
+    touchNode(hub_.db(), nodeId, ctx.ip, jsonStr(msg, "version").substr(0, 32), t);
     hub_.live().setConnected(nodeId, true, t);
     LOG_INFO << "Agent 접속: " << node->name << " (" << ctx.ip << ")";
 
@@ -92,9 +94,10 @@ void AgentGateway::onAuth(const WebSocketConnectionPtr& conn, Ctx& ctx, const Js
     sendJson(conn, v);
 
     hub_.pushRoutes(nodeId); // 입구면 라우팅 표, 모든 노드에 터널·상태 확인 설정
+    hub_.pushTrust(nodeId);  // 터미널 신뢰 목록 (Agent가 터미널 열기 서명을 직접 확인)
 
     // Hub가 가진 Agent와 버전이 다르면 업데이트 지시 (Agent가 체크섬 확인 후 교체·재시작)
-    const std::string agentVersion = msg.get("version", "").asString();
+    const std::string agentVersion = jsonStr(msg, "version");
     if (auto rel = loadAgentRelease(hub_.config().agentDir);
         rel && !agentVersion.empty() && agentVersion != rel->version) {
         auto it = rel->sha256.find(node->arch);
@@ -104,6 +107,9 @@ void AgentGateway::onAuth(const WebSocketConnectionPtr& conn, Ctx& ctx, const Js
             u["version"] = rel->version;
             u["path"] = "/dl/douve-agent-linux-" + node->arch;
             u["sha256"] = it->second;
+            // Agent는 서명(릴리스 키·신뢰하는 키)으로 SHA256SUMS를 확인한 뒤에만 교체한다
+            u["sums"] = rel->sums;
+            u["sig"] = rel->signature;
             sendJson(conn, u);
             LOG_INFO << "Agent 업데이트 지시: " << node->name << " " << agentVersion << " → "
                      << rel->version;
@@ -111,8 +117,8 @@ void AgentGateway::onAuth(const WebSocketConnectionPtr& conn, Ctx& ctx, const Js
     }
 }
 
-void AgentGateway::handleNewMessage(const WebSocketConnectionPtr& conn, std::string&& message,
-                                    const drogon::WebSocketMessageType& type) {
+void AgentGateway::onMessage(const WebSocketConnectionPtr& conn, std::string&& message,
+                             const drogon::WebSocketMessageType& type) {
     if (type != drogon::WebSocketMessageType::Text)
         return;
     auto ctxp = conn->getContext<Ctx>();
@@ -121,13 +127,9 @@ void AgentGateway::handleNewMessage(const WebSocketConnectionPtr& conn, std::str
     Ctx& ctx = *ctxp;
 
     Json::Value msg;
-    Json::CharReaderBuilder rb;
-    std::string err;
-    std::unique_ptr<Json::CharReader> reader(rb.newCharReader());
-    if (!reader->parse(message.data(), message.data() + message.size(), &msg, &err) ||
-        !msg.isObject())
+    if (message.size() > 4 * 1024 * 1024 || !parseJson(message, msg) || !msg.isObject())
         return reject(conn, "잘못된 메시지");
-    const std::string kind = msg.get("type", "").asString();
+    const std::string kind = jsonStr(msg, "type");
 
     if (ctx.nodeId == 0) {
         if (kind != "auth")
@@ -148,21 +150,35 @@ void AgentGateway::dispatch(const WebSocketConnectionPtr& conn, Ctx& ctx, const 
                             Json::Value& msg) {
     if (kind.rfind("term_", 0) == 0)
         return hub_.terminals().fromAgent(ctx.nodeId, msg);
+    if (kind.rfind("file_", 0) == 0)
+        return hub_.files().fromAgent(ctx.nodeId, msg);
     if (kind == "security")
         return hub_.ingestSecurityEvents(ctx.nodeId, msg);
     if (kind == "service_health")
         return hub_.ingestServiceHealth(ctx.nodeId, msg);
+    if (kind == "reach")
+        return hub_.ingestReach(ctx.nodeId, msg);
+    if (kind == "reach_probe_result")
+        return hub_.ingestReachProbe(ctx.nodeId, msg);
+    if (kind == "checkup")
+        return hub_.ingestCheckup(ctx.nodeId, msg);
+    if (kind == "checkup_fixed")
+        return hub_.ingestCheckupFixed(ctx.nodeId, msg);
+    if (kind == "devnet_status")
+        return hub_.ingestDevnetStatus(ctx.nodeId, msg);
+    if (kind == "trust_status")
+        return hub_.ingestTrustStatus(ctx.nodeId, msg);
     if (kind == "portmap_status")
         return hub_.ingestPortmap(ctx.nodeId, msg["status"]);
     if (kind == "expose_req") {
         Json::Value res = hub_.handleExpose(ctx.nodeId, msg);
         // CLI 언어로 (douve-agent expose를 실행한 터미널의 LANG)
-        const std::string lang = msg.get("lang", "").asString();
+        const std::string lang = jsonStr(msg, "lang");
         for (const char* k : {"error", "warning"})
             if (res.isMember(k))
                 res[k] = i18n::translate(res[k].asString(), lang);
         res["type"] = "expose_res";
-        res["rid"] = msg.get("rid", "").asString().substr(0, 40);
+        res["rid"] = jsonStr(msg, "rid").substr(0, 40);
         return sendJson(conn, res);
     }
     const auto t = HubApp::now();
@@ -186,7 +202,7 @@ void AgentGateway::dispatch(const WebSocketConnectionPtr& conn, Ctx& ctx, const 
     }
 }
 
-void AgentGateway::handleConnectionClosed(const WebSocketConnectionPtr& conn) {
+void AgentGateway::onClosed(const WebSocketConnectionPtr& conn) {
     auto ctxp = conn->getContext<Ctx>();
     if (!ctxp || ctxp->nodeId == 0)
         return;
@@ -204,6 +220,7 @@ void AgentGateway::handleConnectionClosed(const WebSocketConnectionPtr& conn) {
         touchNode(hub_.db(), ctxp->nodeId, ctxp->ip, "", t);
         hub_.live().setConnected(ctxp->nodeId, false, t);
         hub_.terminals().nodeDisconnected(ctxp->nodeId);
+        hub_.files().nodeDisconnected(ctxp->nodeId);
         LOG_INFO << "Agent 접속 종료: node " << ctxp->nodeId;
     }
 }
@@ -243,6 +260,34 @@ void AgentGateway::disconnect(std::int64_t nodeId) {
         conns_.erase(it);
     }
     c->shutdown(drogon::CloseCode::kNormalClosure, "노드 삭제됨");
+}
+
+void AgentGateway::handleNewConnection(const drogon::HttpRequestPtr& req,
+                                       const WebSocketConnectionPtr& conn) {
+    try {
+        onConnect(req, conn);
+    } catch (const std::exception& e) {
+        LOG_WARN << "WebSocket 접속 처리 실패 gateway: " << e.what();
+        conn->forceClose();
+    }
+}
+
+void AgentGateway::handleNewMessage(const WebSocketConnectionPtr& conn, std::string&& message,
+                                    const drogon::WebSocketMessageType& type) {
+    try {
+        onMessage(conn, std::move(message), type);
+    } catch (const std::exception& e) {
+        LOG_WARN << "WebSocket 메시지 처리 실패 gateway: " << e.what();
+        conn->forceClose();
+    }
+}
+
+void AgentGateway::handleConnectionClosed(const WebSocketConnectionPtr& conn) {
+    try {
+        onClosed(conn);
+    } catch (const std::exception& e) {
+        LOG_WARN << "WebSocket 종료 처리 실패 gateway: " << e.what();
+    }
 }
 
 } // namespace douve

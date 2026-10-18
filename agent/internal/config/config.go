@@ -123,6 +123,10 @@ func ValidateHubURL(raw string) (string, error) {
 	if err != nil || u.Host == "" {
 		return "", fmt.Errorf(i18n.T("Hub 주소 형식 오류: %q"), raw)
 	}
+	// user@host 형태는 보이는 주소와 실제 접속 주소가 달라 속이는 데 쓰인다 (퍼징으로 발견)
+	if u.User != nil || u.Opaque != "" || u.Fragment != "" || strings.Contains(raw, "@") {
+		return "", fmt.Errorf(i18n.T("Hub 주소 형식 오류: %q"), raw)
+	}
 	if u.Path != "" || u.RawQuery != "" {
 		return "", fmt.Errorf(i18n.T("Hub 주소에는 경로를 넣지 마세요: %q"), raw)
 	}

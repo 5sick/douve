@@ -8,3 +8,9 @@ web/dist/
 *.db
 *.db-*
 .env
+build/
+crash-*
+oom-*
+leak-*
+timeout-*
+testbin/

@@ -1,4 +1,5 @@
 #include "settings.h"
+#include "util/json.h"
 
 #include "store/invites.h"
 
@@ -67,10 +68,7 @@ void RuntimeSettings::saveFeatures(Database& db, const Features& f, std::int64_t
 void RuntimeSettings::load(const HubConfig& cfg, Database& db) {
     if (auto raw = getSetting(db, "features")) {
         Json::Value v;
-        Json::CharReaderBuilder rb;
-        std::string err;
-        std::istringstream in(*raw);
-        if (Json::parseFromStream(rb, in, &v, &err)) {
+        if (parseJson(*raw, v)) {
             std::lock_guard lk(mu_);
             f_ = Features::fromJson(v);
         }

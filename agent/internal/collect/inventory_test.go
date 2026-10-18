@@ -7,12 +7,22 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
 func TestParseFailedUnits(t *testing.T) {
 	got := parseFailedUnits("● nginx.service loaded failed failed The nginx\nfoo.timer loaded failed failed x\n\n")
 	if len(got) != 2 || got[0] != "nginx.service" || got[1] != "foo.timer" {
+		t.Fatalf("%v", got)
+	}
+}
+
+func TestParseTimerTriggered(t *testing.T) {
+	got := parseTimerTriggered("Id=dnf-makecache.service\nTriggeredBy=dnf-makecache.timer\n\n" +
+		"Id=sshd.service\nTriggeredBy=\n\nId=ssh.service\nTriggeredBy=ssh.socket\n\n" +
+		"TriggeredBy=a.timer b.path\nId=both.service\n")
+	if len(got) != 2 || got[0] != "dnf-makecache.service" || got[1] != "both.service" {
 		t.Fatalf("%v", got)
 	}
 }
@@ -115,5 +125,25 @@ func TestDetectCloud(t *testing.T) {
 		if got := DetectCloud(d); got != c.want {
 			t.Fatalf("%v → %q, want %q", c.files, got, c.want)
 		}
+	}
+}
+
+func TestExposedListeners(t *testing.T) {
+	// 가짜 /proc: 0.0.0.0:22, 127.0.0.1:5432, 10.200.0.2:8080(WireGuard), 203.0.113.9:9000(공인)
+	proc := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(proc, "net"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	tcp := "  sl  local_address rem_address   st tx_queue rx_queue tr tm->when retrnsmt   uid  timeout inode\n" +
+		"   0: 00000000:0016 00000000:0000 0A 00000000:00000000 00:00000000 00000000     0        0 1001 1\n" +
+		"   1: 0100007F:1538 00000000:0000 0A 00000000:00000000 00:00000000 00000000     0        0 1002 1\n" +
+		"   2: 0200C80A:1F90 00000000:0000 0A 00000000:00000000 00:00000000 00000000     0        0 1003 1\n" +
+		"   3: 097100CB:2328 00000000:0000 0A 00000000:00000000 00:00000000 00000000     0        0 1004 1\n"
+	if err := os.WriteFile(filepath.Join(proc, "net", "tcp"), []byte(tcp), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	got := strings.Join(ExposedListeners(proc), ",")
+	if got != "22,9000" && got != "9000,22" {
+		t.Fatalf("인터넷 쪽 포트: %q", got)
 	}
 }

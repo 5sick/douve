@@ -15,7 +15,15 @@ std::optional<AgentRelease> loadAgentRelease(const std::string& dir) {
         r.version.pop_back();
     if (r.version.empty() || r.version.size() > 64)
         return std::nullopt;
-    std::ifstream sums(dir + "/SHA256SUMS");
+    auto readAll = [](const std::string& p) {
+        std::ifstream f(p, std::ios::binary);
+        std::stringstream ss;
+        ss << f.rdbuf();
+        return ss.str();
+    };
+    r.sums = readAll(dir + "/SHA256SUMS");
+    r.signature = readAll(dir + "/SHA256SUMS.minisig");
+    std::istringstream sums(r.sums);
     static const std::regex line(R"(^([0-9a-f]{64})\s+\*?douve-agent-linux-(amd64|arm64)\s*$)");
     std::string s;
     while (std::getline(sums, s)) {

@@ -25,6 +25,8 @@ import (
 	"github.com/5sick/douve/agent/internal/collect"
 	"github.com/5sick/douve/agent/internal/i18n"
 	"github.com/5sick/douve/agent/internal/portmap"
+	"github.com/5sick/douve/agent/internal/sign"
+	"github.com/5sick/douve/agent/internal/update"
 )
 
 // Options는 설치 선택이다. 비어 있는 값은 대화형으로 묻는다 (Yes면 추천값).
@@ -35,7 +37,8 @@ type Options struct {
 	Features   string // recommended | custom (custom이면 항목별로 묻는다)
 	FeatureSet map[string]bool
 	Yes        bool   // 묻지 않고 추천값
-	From       string // 로컬 릴리스 폴더 (douve-hub-linux-*, douve-agent-linux-*, SHA256SUMS, VERSION)
+	From       string // 로컬 릴리스 폴더 (douve-hub-linux-*, douve-agent-linux-*, SHA256SUMS(.minisig), VERSION)
+	TrustedKey string // 공식 릴리스 키 말고도 믿을 공개키 파일 (직접 빌드한 릴리스) — Agent 업데이트에도 쓰도록 저장
 	Release    string // 릴리스 주소 (기본 GitHub 최신)
 	TestPlain  bool   // 시험용: 입구를 :80 평문으로 (인증서 없이)
 }
@@ -43,13 +46,14 @@ type Options struct {
 const DefaultRelease = "https://github.com/5sick/douve/releases/latest/download"
 
 type Installer struct {
-	Opt         Options
-	cloud       string // 클라우드 업체 (방화벽 안내)
-	portForward bool   // 공유기 포트 자동 열기를 켰는지
-	In          *bufio.Reader
-	Out         io.Writer
-	arch        string
-	tmp         string
+	Opt           Options
+	cloud         string // 클라우드 업체 (방화벽 안내)
+	portForward   bool   // 공유기 포트 자동 열기를 켰는지
+	signedVersion string // 서명된 릴리스 버전
+	In            *bufio.Reader
+	Out           io.Writer
+	arch          string
+	tmp           string
 }
 
 func New(opt Options, out io.Writer) *Installer {
@@ -382,6 +386,30 @@ func (s *Installer) fetch(ctx context.Context) error {
 		return err
 	}
 	b, _ := os.ReadFile(sums)
+	// 체크섬 목록은 서명으로 확인한다 (공식 릴리스 키, --trusted-key)
+	sigPath, err := s.get("SHA256SUMS.minisig")
+	if err != nil {
+		return fmt.Errorf(i18n.T("릴리스 서명(SHA256SUMS.minisig)을 받지 못했습니다: %w"), err)
+	}
+	sig, _ := os.ReadFile(sigPath)
+	keys := update.TrustedKeys("")
+	if s.Opt.TrustedKey != "" {
+		kb, err := os.ReadFile(s.Opt.TrustedKey)
+		if err != nil {
+			return err
+		}
+		k, err := sign.ParsePublicKey(string(kb))
+		if err != nil {
+			return err
+		}
+		keys = append(keys, k)
+	}
+	trusted, err := sign.Verify(keys, b, string(sig))
+	if err != nil {
+		return fmt.Errorf(i18n.T("릴리스 서명 확인 실패: %w"), err)
+	}
+	s.say("  %s ✓", "SHA256SUMS.minisig")
+	s.signedVersion = sign.CommentField(trusted, "version")
 	want := map[string]string{}
 	for _, line := range strings.Split(string(b), "\n") {
 		f := strings.Fields(line)
@@ -395,6 +423,10 @@ func (s *Installer) fetch(ctx context.Context) error {
 			return err
 		}
 		if name == "VERSION" {
+			v, _ := os.ReadFile(p)
+			if strings.TrimSpace(string(v)) != s.signedVersion {
+				return fmt.Errorf(i18n.T("VERSION(%s)이 서명된 버전(%s)과 다릅니다"), strings.TrimSpace(string(v)), s.signedVersion)
+			}
 			continue
 		}
 		got, _ := sha256File(p)
@@ -435,7 +467,7 @@ func (s *Installer) installHub(ctx context.Context) error {
 		return err
 	}
 	// 다른 서버 추가 때 내려줄 Agent
-	for _, f := range []string{"douve-agent-linux-amd64", "douve-agent-linux-arm64", "SHA256SUMS", "VERSION"} {
+	for _, f := range []string{"douve-agent-linux-amd64", "douve-agent-linux-arm64", "SHA256SUMS", "SHA256SUMS.minisig", "VERSION"} {
 		if err := installFile(filepath.Join(s.tmp, f), "/usr/local/share/douve/agent/"+f, 0o644); err != nil {
 			return err
 		}
@@ -528,6 +560,16 @@ func (s *Installer) installAgent(ctx context.Context) error {
 	if _, err := run(agent, "join", "--hub", "http://127.0.0.1:8700", "--token", token); err != nil {
 		return err
 	}
+	// 직접 빌드한 릴리스의 키: 이 서버 Agent의 자동 업데이트도 이 키를 믿게
+	if s.Opt.TrustedKey != "" {
+		kb, err := os.ReadFile(s.Opt.TrustedKey)
+		if err != nil {
+			return err
+		}
+		if err := os.WriteFile("/etc/douve-agent/"+update.TrustedKeysFile, kb, 0o600); err != nil {
+			return err
+		}
+	}
 	if s.Opt.Mode == "public" {
 		if s.Opt.TestPlain {
 			_ = os.MkdirAll("/etc/douve-agent", 0o700)
@@ -564,7 +606,7 @@ func (s *Installer) installAgent(ctx context.Context) error {
 func (s *Installer) finish(ctx context.Context) error {
 	if s.Opt.Mode == "tailscale" {
 		s.say("\n완료! Tailscale에 연결된 기기에서 여세요:\n\n    %s\n", s.publicURL())
-		s.say("  Tailscale 사용자 %s로 바로 로그인됩니다 (비밀번호·패스키 없음).", s.Opt.Email)
+		s.say("  Tailscale 사용자 %s로 바로 로그인됩니다 (비밀번호 없음). 웹 터미널을 쓰려면 계정 화면에서 패스키를 등록하세요.", s.Opt.Email)
 		s.say("  다른 서버 추가: Douve → 서버 → \"서버 추가\"")
 		return nil
 	}

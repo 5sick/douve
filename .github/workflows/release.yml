@@ -64,6 +64,14 @@ jobs:
           cp deploy/install.sh rel/install.sh 2>/dev/null || true
           chmod +x rel/douve-*
           cd rel && sha256sum douve-* > SHA256SUMS && cat SHA256SUMS
+      - name: 릴리스 서명 (minisign 호환, Agent·설치기가 확인)
+        env:
+          DOUVE_SIGNING_KEY: ${{ secrets.DOUVE_SIGNING_KEY }}
+        run: |
+          test -n "$DOUVE_SIGNING_KEY" || { echo "DOUVE_SIGNING_KEY 비밀값이 없습니다"; exit 1; }
+          chmod +x art/agent/douve-sign
+          art/agent/douve-sign sign - rel/SHA256SUMS "${GITHUB_REF_NAME}"
+          cat rel/SHA256SUMS.minisig
       - name: GitHub Release
         env:
           GH_TOKEN: ${{ github.token }}

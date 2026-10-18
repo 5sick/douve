@@ -1,6 +1,7 @@
 #include "store/invites.h"
 
 #include "util/crypto.h"
+#include "util/json.h"
 
 #include <algorithm>
 #include <cctype>
@@ -8,18 +9,46 @@
 namespace douve {
 
 Invite createInvite(Database& db, const std::string& email, std::optional<std::int64_t> createdBy,
-                    int ttlSeconds, std::int64_t now) {
+                    int ttlSeconds, std::int64_t now, const InviteAccess& access) {
     Invite inv;
     inv.token = randomToken(32);
     inv.email = email;
     std::transform(inv.email.begin(), inv.email.end(), inv.email.begin(),
                    [](unsigned char c) { return std::tolower(c); });
     inv.expiresAt = now + ttlSeconds;
-    Statement s(db, "INSERT INTO invites (token_hash, email, created_by, created_at, expires_at) "
-                    "VALUES (?, ?, ?, ?, ?)");
+    Json::Value g(Json::objectValue);
+    g["nodes"] = Json::Value(Json::arrayValue);
+    g["services"] = Json::Value(Json::arrayValue);
+    for (auto id : access.nodes)
+        g["nodes"].append(Json::Int64(id));
+    for (auto id : access.services)
+        g["services"].append(Json::Int64(id));
+    Json::StreamWriterBuilder w;
+    w["indentation"] = "";
+    Statement s(db, "INSERT INTO invites (token_hash, email, created_by, created_at, expires_at, "
+                    "role, grants) VALUES (?, ?, ?, ?, ?, ?, ?)");
     s.bind(1, sha256(inv.token)).bind(2, inv.email).bind(3, createdBy).bind(4, now);
-    s.bind(5, inv.expiresAt).run();
+    s.bind(5, inv.expiresAt).bind(6, roleName(access.role)).bind(7, Json::writeString(w, g)).run();
     return inv;
+}
+
+std::optional<InviteAccess> inviteAccess(Database& db, const std::string& token) {
+    Statement s(db, "SELECT role, grants FROM invites WHERE token_hash = ?");
+    s.bind(1, sha256(token));
+    if (!s.step())
+        return std::nullopt;
+    InviteAccess a;
+    a.role = parseRole(s.text(0)).value_or(Role::App);
+    Json::Value g;
+    if (parseJson(s.text(1), g) && g.isObject()) {
+        for (const auto& id : g["nodes"])
+            if (id.isInt64())
+                a.nodes.insert(id.asInt64());
+        for (const auto& id : g["services"])
+            if (id.isInt64())
+                a.services.insert(id.asInt64());
+    }
+    return a;
 }
 
 std::optional<std::string> peekInvite(Database& db, const std::string& token, std::int64_t now) {

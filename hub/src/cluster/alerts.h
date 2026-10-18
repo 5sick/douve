@@ -20,7 +20,22 @@ struct AlertThresholds {
     int offlineSeconds = 120;
     double diskPercent = 90;
     double memPercent = 95;
+    // 타이머 유닛(dnf-makecache 등)은 한 번 실패해도 다음 실행에서 풀리는 일이 많다.
+    // 이 시간 넘게 계속 실패 상태일 때만(대개 2회 연속 실패) 알린다.
+    int timerUnitGraceSeconds = 7200;
 };
+
+// 유닛이 언제부터 계속 실패 상태인지 (노드 하나 분량, rule 이름이 아닌 유닛 이름이 키)
+struct UnitSeen {
+    std::int64_t since = 0;    // 연속 실패가 시작된 시각
+    std::int64_t lastSeen = 0; // 마지막으로 실패 목록에서 본 시각
+};
+using UnitTracker = std::map<std::string, UnitSeen>;
+
+// 인벤토리의 failed_units로 tracker를 갱신한다. 타이머가 다시 돌면서 잠깐 activating이 되어
+// 목록에서 빠지는 것은 연속 실패로 본다 (forgetSeconds 동안 안 보여야 풀린 것으로 본다).
+void trackFailedUnits(UnitTracker& t, const Json::Value& inventory, std::int64_t now,
+                      std::int64_t forgetSeconds = 300);
 
 struct NodeView {
     std::int64_t id = 0;
@@ -29,6 +44,7 @@ struct NodeView {
     std::optional<std::int64_t> lastSeenAt; // 마지막으로 살아 있던 시각
     std::optional<Sample> latest;
     std::optional<Json::Value> inventory;
+    UnitTracker units; // 비어 있으면 타이머 유닛도 바로 알린다
 };
 
 struct Conditions {

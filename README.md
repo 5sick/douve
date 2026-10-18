@@ -25,7 +25,8 @@ Douve is one install that covers the *front door* part of that, with secure defa
 
 - **Passkey login gateway** for all your apps — even apps with no login of their own. No passwords
   anywhere. Optional Google sign-in.
-- **Close port 22.** The browser terminal requires a fresh passkey check (60 s), records sessions,
+- **Close port 22.** Every browser terminal is opened with a passkey signature that the server
+  itself verifies (a compromised Hub can't open one on its own), records sessions,
   and works on SELinux systems (Rocky/RHEL) as well as Ubuntu/Debian.
 - **Security monitoring that knows it was you.** SSH logins and failures, `sudo` by non-admin
   accounts, account and important-file changes (`authorized_keys`, `sudoers`, `sshd_config`, …),
@@ -46,6 +47,9 @@ And the everyday parts:
 - **Monitoring:** CPU, memory, disk, network, failed systemd units, containers, WireGuard peers,
   service health checks, Telegram alerts.
 - **Home dashboard** with app icons (a Homepage-style start page).
+- **Internal or public, per app.** Register your phone and laptop with a QR code (WireGuard, run by
+  Douve itself): while connected, apps marked *internal* open at their usual address with no sign-in
+  page, and they don't exist on the internet. Flip one switch to publish an app when it's ready.
 - **No domain? Tailscale mode:** zero public ports, sign-in with your Tailscale identity.
 - **Small:** two static binaries (Hub ≈ 12 MB, Agent ≈ 9 MB), SQLite, no Docker required.
   Runs on a 1 GB VM. English and Korean UI.
@@ -62,6 +66,9 @@ On a fresh Linux server with systemd (Ubuntu, Debian, Rocky/RHEL; x86_64 or ARM6
 ```sh
 curl -fsSL https://github.com/5sick/douve/releases/latest/download/install.sh | sudo sh
 ```
+
+The release is signed; the installer verifies the signature and checksums before installing
+anything ([how to verify by hand](SECURITY.md#verifying-releases)).
 
 The installer asks a few questions (press Enter for the recommended answer):
 

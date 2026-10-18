@@ -7,9 +7,12 @@
 #include "http_util.h"
 #include "net/https_client.h"
 #include "store/invites.h"
+#include "store/nodes.h"
 #include "store/repo.h"
+#include "store/services.h"
 #include "util/encoding.h"
 #include "util/i18n.h"
+#include "util/json.h"
 #include "version.h"
 
 #include <drogon/drogon.h>
@@ -165,31 +168,47 @@ void HubApp::registerSettingsRoutes() {
         {drogon::Post});
 
     // 초대 링크 만들기 (다른 사람 또는 내 새 기기). 사람을 들이는 일이라 패스키 재확인.
-    app.registerHandler("/api/invites/create",
-                        [this](const HttpRequestPtr& req, Callback&& cb) {
-                            if (!sameOrigin(req))
-                                return cb(error(drogon::k403Forbidden, "잘못된 요청 출처"));
-                            const auto t = now();
-                            auto s = currentSession(req, t);
-                            if (!s)
-                                return cb(error(drogon::k401Unauthorized, "로그인이 필요합니다"));
-                            if (!sessions_->reauthFresh(*s, t))
-                                return cb(error(drogon::k403Forbidden, "reauth_required"));
-                            auto body = req->getJsonObject();
-                            std::string email = body ? (*body).get("email", "").asString() : "";
-                            if (email.find('@') == std::string::npos || email.size() > 254 ||
-                                email.find_first_of(" \t\r\n<>") != std::string::npos)
-                                return cb(
-                                    error(drogon::k400BadRequest, "이메일 주소를 확인하세요"));
-                            auto inv = createInvite(*db_, email, s->userId, 24 * 3600, t);
-                            audit(*db_, s->userId, "invite_created", clientIp(req), inv.email, t);
-                            Json::Value v;
-                            v["link"] = cfg_.publicUrl + "/invite#" + inv.token;
-                            v["email"] = inv.email;
-                            v["expires_at"] = Json::Int64(inv.expiresAt);
-                            cb(json(v));
-                        },
-                        {drogon::Post});
+    app.registerHandler(
+        "/api/invites/create",
+        [this](const HttpRequestPtr& req, Callback&& cb) {
+            if (!sameOrigin(req))
+                return cb(error(drogon::k403Forbidden, "잘못된 요청 출처"));
+            const auto t = now();
+            auto s = currentSession(req, t);
+            if (!s)
+                return cb(error(drogon::k401Unauthorized, "로그인이 필요합니다"));
+            if (!sessions_->reauthFresh(*s, t))
+                return cb(error(drogon::k403Forbidden, "reauth_required"));
+            auto body = req->getJsonObject();
+            if (!body || !body->isObject())
+                return cb(error(drogon::k400BadRequest, "JSON 본문이 필요합니다"));
+            std::string email = jsonStr(*body, "email");
+            if (email.find('@') == std::string::npos || email.size() > 254 ||
+                email.find_first_of(" \t\r\n<>") != std::string::npos)
+                return cb(error(drogon::k400BadRequest, "이메일 주소를 확인하세요"));
+            // 역할: 정하지 않으면 가장 좁은 권한(app)
+            InviteAccess acc{Role::App, {}, {}};
+            if (auto r = parseRole(jsonStr(*body, "role", "app")))
+                acc.role = *r;
+            else
+                return cb(
+                    error(drogon::k400BadRequest, "역할은 admin, operator, app 중 하나입니다"));
+            for (const auto& n : (*body)["nodes"])
+                if (n.isInt64() && findNode(*db_, n.asInt64()))
+                    acc.nodes.insert(n.asInt64());
+            for (const auto& sv : (*body)["services"])
+                if (sv.isInt64() && findService(*db_, sv.asInt64()))
+                    acc.services.insert(sv.asInt64());
+            auto inv = createInvite(*db_, email, s->userId, 24 * 3600, t, acc);
+            audit(*db_, s->userId, "invite_created", clientIp(req),
+                  inv.email + " role=" + roleName(acc.role), t);
+            Json::Value v;
+            v["link"] = cfg_.publicUrl + "/invite#" + inv.token;
+            v["email"] = inv.email;
+            v["expires_at"] = Json::Int64(inv.expiresAt);
+            cb(json(v));
+        },
+        {drogon::Post});
 }
 
 } // namespace douve

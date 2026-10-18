@@ -25,6 +25,7 @@ import (
 	"github.com/5sick/douve/agent/internal/collect"
 	"github.com/5sick/douve/agent/internal/config"
 	"github.com/5sick/douve/agent/internal/features"
+	"github.com/5sick/douve/agent/internal/sign"
 	"github.com/5sick/douve/agent/internal/update"
 	"github.com/5sick/douve/agent/internal/version"
 )
@@ -134,9 +135,11 @@ type hubMsg struct {
 	MetricsInterval   int             `json:"metrics_interval"`
 	InventoryInterval int             `json:"inventory_interval"`
 	Features          json.RawMessage `json:"features"`
+	Sums              string          `json:"sums"`
+	Sig               string          `json:"sig"`
 }
 
-func applyUpdate(ctx context.Context, cfg *config.Config, msg hubMsg, log *slog.Logger) error {
+func applyUpdate(ctx context.Context, cfg *config.Config, msg hubMsg, keys []sign.PublicKey, log *slog.Logger) error {
 	exe, err := os.Executable()
 	if err == nil {
 		exe, err = filepath.EvalSymlinks(exe)
@@ -145,7 +148,8 @@ func applyUpdate(ctx context.Context, cfg *config.Config, msg hubMsg, log *slog.
 		return err
 	}
 	log.Info("자동 업데이트 시작", "from", version.Version, "to", msg.Version)
-	err = update.Apply(ctx, cfg.HubURL, msg.Path, msg.SHA256, exe, update.StateDir())
+	rel := update.Release{Version: msg.Version, Path: msg.Path, SHA256: msg.SHA256, Sums: msg.Sums, Sig: msg.Sig}
+	err = update.Apply(ctx, cfg.HubURL, rel, keys, runtime.GOARCH, version.Version, exe, update.StateDir())
 	if err != nil {
 		log.Warn("자동 업데이트 실패", "err", err)
 	}
@@ -178,6 +182,8 @@ type Handlers struct {
 	Message func(typ string, raw []byte)
 	// Inventory에 덧붙일 값 (예: 터미널 허용 계정)
 	TerminalUsers func() []string
+	// TrustedKeys는 자동 업데이트 서명을 확인할 공개키 (없으면 공식 릴리스 키만)
+	TrustedKeys func() []sign.PublicKey
 }
 
 func writeJSON(ctx context.Context, c *websocket.Conn, v any) error {
@@ -266,7 +272,11 @@ func session(ctx context.Context, cfg *config.Config, key ed25519.PrivateKey, h 
 				readErr <- fmt.Errorf("%w: %s", ErrRejected, msg.Error)
 				return
 			case "update":
-				if err := applyUpdate(sessCtx, cfg, msg, log); err == nil {
+				keys := update.TrustedKeys("")
+				if h.TrustedKeys != nil {
+					keys = h.TrustedKeys()
+				}
+				if err := applyUpdate(sessCtx, cfg, msg, keys, log); err == nil {
 					readErr <- ErrUpdated
 					return
 				}

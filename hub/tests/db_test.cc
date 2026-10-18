@@ -8,7 +8,7 @@ using namespace douve;
 
 TEST(db_migrates_to_latest) {
     Database db(":memory:");
-    CHECK_EQ(db.schemaVersion(), 14);
+    CHECK_EQ(db.schemaVersion(), 20);
     // 테이블이 실제로 생겼는지
     Statement s(db, "SELECT count(*) FROM sqlite_master WHERE type='table' AND name IN "
                     "('users','passkeys','sessions','pending','audit_log','nodes','join_tokens',"
@@ -71,7 +71,7 @@ TEST(db_file_reopen_keeps_version) {
     }
     {
         Database db(path);
-        CHECK_EQ(db.schemaVersion(), 14);
+        CHECK_EQ(db.schemaVersion(), 20);
         Statement q(db, "SELECT email FROM users");
         CHECK(q.step() && q.text(0) == "a@b.c");
     }

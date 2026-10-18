@@ -15,11 +15,19 @@ jobs:
           go-version-file: agent/go.mod
       - run: test -z "$(gofmt -l agent)" || (gofmt -l agent; exit 1)
       - run: make test-agent
+      - name: Agent 퍼징 (대상마다 15초)
+        run: FUZZTIME=15 scripts/fuzz.sh agent
       - run: make agent
       - uses: actions/upload-artifact@v4
         with:
           name: douve-agent
           path: dist/
+      - name: 내부 길 E2E용 시험 기기
+        run: CGO_ENABLED=0 go -C agent build -o ../testbin/devnet-probe ./internal/devnet/probe
+      - uses: actions/upload-artifact@v4
+        with:
+          name: devnet-probe
+          path: testbin/
 
   hub:
     needs: agent
@@ -34,9 +42,11 @@ jobs:
             git ca-certificates build-essential cmake ninja-build pkg-config \
             libdrogon-dev libpq-dev libmariadb-dev libhiredis-dev libyaml-cpp-dev libc-ares-dev \
             libssl-dev libsqlite3-dev zlib1g-dev uuid-dev libjsoncpp-dev libbrotli-dev libcbor-dev libcurl4-openssl-dev \
-            nlohmann-json3-dev python3 python3-jwt python3-cryptography sqlite3 curl iproute2
+            nlohmann-json3-dev clang libclang-rt-dev python3 python3-jwt python3-cryptography sqlite3 curl iproute2 openssl
       - uses: actions/checkout@v4
       - run: make test-hub
+      - name: Hub 퍼징 (libFuzzer + ASan/UBSan, 대상마다 20초)
+        run: FUZZTIME=20 scripts/fuzz.sh hub
       - name: Google 로그인 E2E (가짜 Google 서버)
         run: tests/e2e/google_flow.sh build/hub/douve-hub
       - uses: actions/download-artifact@v4
@@ -44,14 +54,26 @@ jobs:
           name: douve-agent
           path: dist/
       - name: Agent E2E (join → 서명 인증 → 메트릭 → 삭제)
-        run: chmod +x dist/douve-agent-* && tests/e2e/agent_flow.sh build/hub/douve-hub dist
+        run: chmod +x dist/douve-agent-* dist/douve-sign && tests/e2e/agent_flow.sh build/hub/douve-hub dist
       - name: 입구(edge) E2E (서비스 등록 → 로그인 보호 → Hub 장애)
         run: tests/e2e/edge_flow.sh build/hub/douve-hub dist
       - name: 웹 설정 E2E (텔레그램·초대)
         run: tests/e2e/settings_flow.sh build/hub/douve-hub
       - name: Tailscale 신원 로그인 E2E
         run: tests/e2e/tailscale_flow.sh build/hub/douve-hub
+      - name: 역할·권한 E2E (관리자·운영자·앱 사용자)
+        run: tests/e2e/rbac_flow.sh build/hub/douve-hub
       - name: 보안 감시 E2E
         run: tests/e2e/security_flow.sh build/hub/douve-hub dist
       - name: 비상 출입구 E2E (복구 코드·백업·복원)
         run: tests/e2e/recovery_flow.sh build/hub/douve-hub
+      - uses: actions/download-artifact@v4
+        with:
+          name: devnet-probe
+          path: testbin/
+      - name: 연결 진단 E2E (STUN → 외부 접속 검증 → 길 → 입구 알림)
+        run: tests/e2e/reach_flow.sh build/hub/douve-hub dist
+      - name: 보안 점검표 E2E (점검 → 패스키 서명 고치기 → 다시 점검)
+        run: tests/e2e/checkup_flow.sh build/hub/douve-hub dist
+      - name: 내부 길 E2E (기기 WireGuard → 내부 DNS·HTTPS → 권한 → Hub 장애)
+        run: PROBE=testbin/devnet-probe tests/e2e/devnet_flow.sh build/hub/douve-hub dist

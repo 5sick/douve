@@ -36,7 +36,7 @@ for _ in $(seq 50); do curl -sf "$BASE/healthz" >/dev/null && break; sleep 0.1; 
 python3 - "$DIR/hub.db" <<'PY'
 import hashlib, sqlite3, sys, time
 db = sqlite3.connect(sys.argv[1]); now = int(time.time())
-db.execute("INSERT INTO users (id, email, created_at, allowed) VALUES (1, 'me@example.com', ?, 1)", (now,))
+db.execute("INSERT INTO users (id, email, created_at, allowed, role) VALUES (1, 'me@example.com', ?, 1, 'admin')", (now,))
 for tok, re in (("set-fresh-session-0123456789abcdef", now), ("set-stale-session-0123456789abcdef", now - 3600)):
     db.execute("INSERT INTO sessions VALUES (?, 1, 'passkey', ?, ?, ?, ?, ?, '', '', '')",
                (hashlib.sha256(tok.encode()).digest(), now, now, now + 3600, now + 7200, re))
@@ -121,6 +121,44 @@ curl -s -H "Cookie: douve_session=$F" "$BASE/api/channels" | python3 -c "import 
     && ok "채널 끄기" || bad "채널 끄기"
 post $F /api/channels/delete "{\"id\":$BID}" >/dev/null
 [ "$(sqlite3 "$DIR/hub.db" "SELECT count(*) FROM notify_channels")" = 2 ] && ok "채널 삭제" || bad "채널 삭제"
+
+# 감사 기록 해시 체인: 웹훅 내보내기 → 받은 쪽에서 체인 검증, CLI 확인, 변조 감지
+out=$(post $F /api/channels/create "{\"kind\":\"webhook\",\"name\":\"audit\",\"config\":{\"url\":\"http://127.0.0.1:$WP/audit\",\"audit\":true}}")
+case "$out" in *error*) ok "감사 기록 웹훅은 서명 비밀값 필요" ;; *) bad "비밀값 검사 ($out)";; esac
+out=$(post $F /api/channels/create "{\"kind\":\"webhook\",\"name\":\"audit\",\"config\":{\"url\":\"http://127.0.0.1:$WP/audit\",\"secret\":\"aud1t\",\"audit\":true}}")
+case "$out" in *'"audit":true'*) ok "감사 기록 웹훅 추가" ;; *) bad "감사 웹훅 ($out)";; esac
+python3 - "$DIR/hook.log" "$DIR/hub.db" <<'PY' && ok "내보낸 감사 기록의 체인·서명을 밖에서 검증" || bad "감사 내보내기 ($(grep /audit "$DIR/hook.log" | head -c 600))"
+import hashlib, hmac, json, sqlite3, sys, time
+def h(prev, r):
+    m = b"douve-audit-v1"
+    for v in (prev, str(r["id"]).encode(), str(r["ts"]).encode(),
+              (str(r["user_id"]) if r["user_id"] is not None else "").encode(),
+              r["event"].encode(), r["ip"].encode(), r["detail"].encode()):
+        m += str(len(v)).encode() + b":" + v
+    return hashlib.sha256(m).digest()
+db = sqlite3.connect(sys.argv[2])
+want = db.execute("SELECT max(id) FROM audit_log").fetchone()[0]
+for _ in range(50):
+    batches = [json.loads(l) for l in open(sys.argv[1]) if '"/audit"' in l]
+    recs = [r for b in batches for r in json.loads(b["body"])["records"]]
+    if recs and recs[-1]["id"] >= want: break
+    time.sleep(0.1)
+prev = bytes(32)
+for b in batches:
+    want_sig = "sha256=" + hmac.new(b"aud1t", (b["ts"] + "." + b["body"]).encode(), hashlib.sha256).hexdigest()
+    assert b["sig"] == want_sig
+    body = json.loads(b["body"])
+    assert body["type"] == "audit" and bytes.fromhex(body["prev_hash"]) == prev, "batch 연결"
+    for r in body["records"]:
+        prev = h(prev, r)
+        assert prev.hex() == r["hash"], r
+ids = [r["id"] for r in recs]
+assert ids == list(range(1, len(ids) + 1)) and ids[-1] >= want, ids
+PY
+"$HUB" audit-verify --config "$DIR/hub.json" | grep -q "해시 체인 정상" && ok "audit-verify 정상" || bad "audit-verify"
+sqlite3 "$DIR/hub.db" "UPDATE audit_log SET detail = 'tampered' WHERE id = 2"
+out=$("$HUB" audit-verify --config "$DIR/hub.json"); code=$?
+[ $code = 1 ] && grep -q "#2" <<<"$out" && ok "audit-verify가 변조 위치를 찾음" || bad "변조 감지 ($code $out)"
 
 echo "$PASS passed, $FAIL failed"
 [ "$FAIL" = 0 ]

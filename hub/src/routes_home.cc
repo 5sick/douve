@@ -57,57 +57,76 @@ Json::Value linkJson(const Link& l) {
 
 } // namespace
 
+// 사이드바·홈 요약: 볼 수 있는 서버만 센다. 보안 이슈는 관리자만.
+Json::Value HubApp::summaryJson(const Access& acc) {
+    Json::Value v;
+    int online = 0, total = 0;
+    for (const auto& n : listNodes(*db_)) {
+        if (!acc.node(n.id))
+            continue;
+        ++total;
+        online += live_.connected(n.id) ? 1 : 0;
+    }
+    int alerts = 0;
+    for (const auto& a : openAlerts(*db_))
+        alerts += acc.admin() || (a.nodeId && acc.node(*a.nodeId)) ? 1 : 0;
+    std::int64_t security = 0;
+    if (acc.admin()) {
+        Statement sc(*db_, "SELECT count(*) FROM security_issues WHERE status = 'open'");
+        security = sc.step() ? sc.int64(0) : 0;
+    }
+    v["servers"] = total;
+    v["online"] = online;
+    v["alerts"] = alerts;
+    v["security_open"] = Json::Int64(security);
+    return v;
+}
+
 void HubApp::registerHomeRoutes() {
     auto& app = drogon::app();
     icons_ = std::make_unique<IconCache>(
         (std::filesystem::path(cfg_.databasePath).parent_path() / "icons").string());
 
-    app.registerHandler(
-        "/api/home",
-        [this](const HttpRequestPtr& req, Callback&& cb) {
-            auto s = currentSession(req, now());
-            if (!s)
-                return cb(error(drogon::k401Unauthorized, "로그인이 필요합니다"));
-            Json::Value out;
-            out["email"] = s->email;
-            out["items"] = Json::Value(Json::arrayValue);
-            for (const auto& sv : listServices(*db_)) {
-                if (!sv.onHome)
-                    continue;
-                Json::Value v;
-                v["type"] = "service";
-                v["id"] = Json::Int64(sv.id);
-                v["name"] = sv.name;
-                v["url"] = "https://" + sv.host;
-                v["group"] = sv.group;
-                v["description"] = sv.description;
-                v["icon"] = sv.icon;
-                v["position"] = sv.position;
-                v["auth"] = sv.auth;
-                v["icon_url"] = "/api/icons/service/" + std::to_string(sv.id) + "?v=" + sv.icon;
-                std::lock_guard lk(healthMu_);
-                auto h = health_.find(sv.id);
-                v["health"] = h == health_.end() || h->second.checkedAt == 0
-                                  ? Json::Value()
-                                  : Json::Value(h->second.fails == 0 ? "up" : "down");
-                out["items"].append(v);
-            }
-            for (const auto& l : listLinks(*db_))
-                out["items"].append(linkJson(l));
-            int online = 0, total = 0, alerts = 0;
-            for (const auto& n : listNodes(*db_)) {
-                ++total;
-                online += live_.connected(n.id) ? 1 : 0;
-            }
-            alerts = static_cast<int>(openAlerts(*db_).size());
-            Statement sc(*db_, "SELECT count(*) FROM security_issues WHERE status = 'open'");
-            out["summary"]["servers"] = total;
-            out["summary"]["online"] = online;
-            out["summary"]["alerts"] = alerts;
-            out["summary"]["security_open"] = Json::Int64(sc.step() ? sc.int64(0) : 0);
-            cb(json(out));
-        },
-        {drogon::Get});
+    app.registerHandler("/api/home",
+                        [this](const HttpRequestPtr& req, Callback&& cb) {
+                            auto s = currentSession(req, now());
+                            if (!s)
+                                return cb(error(drogon::k401Unauthorized, "로그인이 필요합니다"));
+                            const auto acc = access(*s);
+                            Json::Value out;
+                            out["email"] = s->email;
+                            out["role"] = roleName(acc.role);
+                            out["items"] = Json::Value(Json::arrayValue);
+                            for (const auto& sv : listServices(*db_)) {
+                                if (!sv.onHome || !acc.service(sv.id, sv.nodeId))
+                                    continue;
+                                Json::Value v;
+                                v["type"] = "service";
+                                v["id"] = Json::Int64(sv.id);
+                                v["name"] = sv.name;
+                                v["url"] = "https://" + sv.host;
+                                v["group"] = sv.group;
+                                v["description"] = sv.description;
+                                v["icon"] = sv.icon;
+                                v["position"] = sv.position;
+                                v["auth"] = sv.auth;
+                                v["icon_url"] =
+                                    "/api/icons/service/" + std::to_string(sv.id) + "?v=" + sv.icon;
+                                std::lock_guard lk(healthMu_);
+                                auto h = health_.find(sv.id);
+                                v["health"] =
+                                    h == health_.end() || h->second.checkedAt == 0
+                                        ? Json::Value()
+                                        : Json::Value(h->second.fails == 0 ? "up" : "down");
+                                out["items"].append(v);
+                            }
+                            if (acc.atLeastOperator()) // 링크는 관리자가 넣은 내부 주소일 수 있다
+                                for (const auto& l : listLinks(*db_))
+                                    out["items"].append(linkJson(l));
+                            out["summary"] = summaryJson(acc);
+                            cb(json(out));
+                        },
+                        {drogon::Get});
 
     // 사이드바 배지용 가벼운 요약
     app.registerHandler("/api/summary",
@@ -115,19 +134,10 @@ void HubApp::registerHomeRoutes() {
                             auto s = currentSession(req, now());
                             if (!s)
                                 return cb(error(drogon::k401Unauthorized, "로그인이 필요합니다"));
-                            int online = 0, total = 0;
-                            for (const auto& n : listNodes(*db_)) {
-                                ++total;
-                                online += live_.connected(n.id) ? 1 : 0;
-                            }
-                            Statement sc(
-                                *db_, "SELECT count(*) FROM security_issues WHERE status = 'open'");
-                            Json::Value v;
+                            const auto acc = access(*s);
+                            Json::Value v = summaryJson(acc);
                             v["email"] = s->email;
-                            v["servers"] = total;
-                            v["online"] = online;
-                            v["alerts"] = static_cast<int>(openAlerts(*db_).size());
-                            v["security_open"] = Json::Int64(sc.step() ? sc.int64(0) : 0);
+                            v["role"] = roleName(acc.role);
                             v["features"] = settings_.features().toJson();
                             cb(json(v));
                         },
@@ -192,12 +202,18 @@ void HubApp::registerHomeRoutes() {
     app.registerHandler(
         "/api/icons/{kind}/{id}",
         [this](const HttpRequestPtr& req, Callback&& cb, const std::string& kind, std::int64_t id) {
-            if (!currentSession(req, now()))
+            auto sess = currentSession(req, now());
+            if (!sess)
                 return cb(error(drogon::k401Unauthorized, "로그인이 필요합니다"));
+            const auto acc = access(*sess);
+            if (kind != "service" && !acc.atLeastOperator())
+                return cb(HttpResponse::newNotFoundResponse());
             std::string key;
             std::vector<std::string> sources;
             if (kind == "service") {
                 auto s = findService(*db_, id);
+                if (s && !acc.service(s->id, s->nodeId))
+                    s.reset();
                 if (!s)
                     return cb(HttpResponse::newNotFoundResponse());
                 key = "service:" + std::to_string(id) + ":" + s->icon + ":" + s->name;

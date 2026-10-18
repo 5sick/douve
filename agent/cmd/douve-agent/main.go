@@ -14,28 +14,38 @@ import (
 	"fmt"
 	"log/slog"
 	"net"
+	"net/netip"
 	"os"
 	"os/signal"
 	"path/filepath"
+	"slices"
 	"strconv"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"syscall"
 	"time"
 
+	"github.com/5sick/douve/agent/internal/checkup"
 	"github.com/5sick/douve/agent/internal/client"
 	"github.com/5sick/douve/agent/internal/collect"
 	"github.com/5sick/douve/agent/internal/config"
 	"github.com/5sick/douve/agent/internal/ctl"
+	"github.com/5sick/douve/agent/internal/devnet"
 	"github.com/5sick/douve/agent/internal/edge"
 	"github.com/5sick/douve/agent/internal/features"
+	"github.com/5sick/douve/agent/internal/files"
 	"github.com/5sick/douve/agent/internal/health"
 	"github.com/5sick/douve/agent/internal/i18n"
 	"github.com/5sick/douve/agent/internal/install"
 	"github.com/5sick/douve/agent/internal/portmap"
+	"github.com/5sick/douve/agent/internal/reach"
 	"github.com/5sick/douve/agent/internal/security"
 	"github.com/5sick/douve/agent/internal/service"
+	"github.com/5sick/douve/agent/internal/sign"
+	"github.com/5sick/douve/agent/internal/sockexec"
 	"github.com/5sick/douve/agent/internal/term"
+	"github.com/5sick/douve/agent/internal/termauth"
 	"github.com/5sick/douve/agent/internal/tunnel"
 	"github.com/5sick/douve/agent/internal/update"
 	"github.com/5sick/douve/agent/internal/version"
@@ -52,6 +62,7 @@ func usage() {
   douve-agent exposed
   douve-agent install-service
   douve-agent status
+  douve-agent terminal-trust [show|reset]   (터미널 신뢰 목록 보기·처음부터 다시 받기, root)
   douve-agent version
 공통 옵션: --dir <설정 디렉터리> (기본 /etc/douve-agent)
 `))
@@ -97,6 +108,10 @@ func main() {
 		}
 	case "expose", "unexpose", "exposed":
 		err = runCtl(cmd, args)
+	case "terminal-trust":
+		err = runTerminalTrust(fs.Args())
+	case "checkup-fix": // 내부용: Agent가 systemd-run으로 샌드박스 밖에서 부른다
+		err = runCheckupFix(fs.Args())
 	case "status":
 		c, e := paths.Load()
 		if e != nil {
@@ -296,10 +311,43 @@ func run(paths config.Paths, log *slog.Logger) error {
 		return err
 	}
 	edgeMgr := edge.NewManager(edgeCfg, update.StateDir(), log.With("part", "edge"))
+	// 내부 길(기기 WireGuard): 입구가 되면 라우팅 표의 devnet대로 연다
+	gw, err := devnet.New(update.StateDir(), edgeMgr.Handler(), edgeMgr.GetCertificate, log.With("part", "devnet"))
+	if err != nil {
+		log.Warn("내부 길을 쓸 수 없음 (상태 디렉터리)", "err", err)
+	} else {
+		edgeMgr.OnDevnet(gw.Apply)
+		defer gw.Close()
+	}
+	hub := &hubLink{}
+	if gw != nil {
+		gw.OnChange = func() { go func() { _ = hub.send(devnetStatus(gw)) }() }
+	}
 	edgeMgr.Start()
 	defer edgeMgr.Close()
 
 	terms := term.NewManager(log.With("part", "term"))
+	// 파일 올리기·내려받기: 터미널과 같은 계정·같은 서명 확인
+	fileSend := &atomic.Value{}
+	fileMgr := files.NewManager(log.With("part", "files"), func() files.Sender {
+		if f, ok := fileSend.Load().(files.Sender); ok {
+			return f
+		}
+		return nil
+	}, func(name string) bool {
+		for _, u := range terms.AllowedUsers() {
+			if u == name {
+				return true
+			}
+		}
+		return false
+	})
+	// 터미널 신뢰 목록: 터미널 열기마다 사용자의 패스키 서명을 이 서버가 직접 확인한다 (Hub를 믿지 않음)
+	trust, err := termauth.Open(update.StateDir())
+	if err != nil {
+		log.Warn("터미널 신뢰 목록을 읽을 수 없음 — 웹 터미널을 열지 않습니다", "err", err)
+		trust = termauth.Locked(update.StateDir(), err)
+	}
 	defer terms.CloseAll()
 	go func() {
 		t := time.NewTicker(time.Minute)
@@ -310,12 +358,12 @@ func run(paths config.Paths, log *slog.Logger) error {
 				return
 			case <-t.C:
 				terms.ReapIdle()
+				fileMgr.ReapIdle()
 			}
 		}
 	}()
 
 	// 보안 감시: 30초마다 모아 Hub로. 연결이 끊긴 동안의 사건은 쌓아 뒀다가 보낸다 (최대 2000개).
-	hub := &hubLink{}
 	if os.Geteuid() == 0 || security.TestHooksEnabled() {
 		sec := security.New(update.StateDir(), terms.TTYOwner)
 		sec.Enabled = func(kind string) bool { return features.Get().SecurityKind(kind) }
@@ -374,6 +422,63 @@ func run(paths config.Paths, log *slog.Logger) error {
 	tun := tunnel.NewClient(c.NodeID, key, log.With("part", "tunnel"))
 	go tun.Run(ctx)
 
+	// 보안 점검표: 접속할 때·6시간마다·Hub가 요청할 때 점검, 고치기는 사람의 패스키 서명을 확인한 뒤에만
+	var checker *checkup.Checker
+	if os.Geteuid() == 0 || os.Getenv("DOUVE_TEST_CHECKUP_ROOT") != "" {
+		checker = checkup.New()
+		if root := os.Getenv("DOUVE_TEST_CHECKUP_ROOT"); root != "" {
+			checker.UseTestRoot(root) // 시험용: 가짜 파일·명령
+		}
+		checker.Listen = func() []string { return collect.ExposedListeners("/proc") }
+	}
+	var checkMu sync.Mutex
+	runCheckup := func() {
+		if checker == nil {
+			return
+		}
+		checkMu.Lock()
+		res := checker.All(ctx)
+		checkMu.Unlock()
+		_ = hub.send(map[string]any{"type": "checkup", "results": res, "at": time.Now().Unix()})
+	}
+	if checker != nil {
+		go func() {
+			select { // 접속·업데이트가 자리를 잡은 뒤
+			case <-ctx.Done():
+				return
+			case <-time.After(20 * time.Second):
+			}
+			t := time.NewTicker(6 * time.Hour)
+			defer t.Stop()
+			for {
+				runCheckup()
+				select {
+				case <-ctx.Done():
+					return
+				case <-t.C:
+				}
+			}
+		}()
+	}
+
+	// 내부 길 상태(기기별 마지막 연결) 30초마다
+	if gw != nil {
+		go func() {
+			t := time.NewTicker(30 * time.Second)
+			defer t.Stop()
+			for {
+				select {
+				case <-ctx.Done():
+					return
+				case <-t.C:
+					if gw.Running() {
+						_ = hub.send(devnetStatus(gw))
+					}
+				}
+			}
+		}()
+	}
+
 	// 공유기 포트 자동 열기 (Hub가 원하는 포트만, 허용 목록 안에서)
 	var lastPortmap atomic.Value // portmap.Status
 	pm := portmap.NewManager(log.With("part", "portmap"), func(s portmap.Status) {
@@ -384,6 +489,52 @@ func run(paths config.Paths, log *slog.Logger) error {
 		pm.Opts = portmap.Options{Gateway: net.ParseIP("127.0.0.1"), NATPMP: a, SSDP: "127.0.0.1:9", Timeout: time.Second}
 	}
 	go pm.Run(ctx)
+
+	// 연결 진단: 인터넷에서 보이는 주소·NAT·공유기 (40초 뒤·30분마다·요청 시). 입구면 터널 상태도.
+	runReach := func() {
+		rctx, cancel := context.WithTimeout(ctx, 30*time.Second)
+		defer cancel()
+		out := reach.OutboundIP()
+		servers := reach.DefaultSTUN
+		if v := os.Getenv("DOUVE_TEST_STUN"); v != "" { // 시험용 가짜 STUN 서버
+			servers = strings.Split(v, ",")
+		}
+		st := reach.STUN(rctx, servers, out)
+		router := map[string]any{}
+		dctx, dcancel := context.WithTimeout(rctx, 8*time.Second)
+		if gw, err := portmap.Discover(dctx, pm.Opts); err == nil {
+			router["kind"] = gw.Kind()
+			if ip, err := gw.ExternalIP(dctx); err == nil {
+				router["external_ip"] = ip.String()
+			}
+		} else {
+			router["error"] = err.Error()
+		}
+		dcancel()
+		msg := map[string]any{"type": "reach", "outbound_ip": out, "stun": st, "router": router, "at": time.Now().Unix()}
+		if t := edgeMgr.Handler().Table(); t != nil && !t.Disabled {
+			msg["tunnels"] = edgeMgr.Handler().Tunnels().ConnectedNodes()
+		}
+		_ = hub.send(msg)
+	}
+	go func() {
+		select {
+		case <-ctx.Done():
+			return
+		case <-time.After(40 * time.Second):
+		}
+		t := time.NewTicker(30 * time.Minute)
+		defer t.Stop()
+		for {
+			runReach()
+			select {
+			case <-ctx.Done():
+				return
+			case <-t.C:
+			}
+		}
+	}()
+
 	// 서비스 상태 확인: 1분마다 로컬에서 확인해 Hub에 보고
 	var checksMu sync.Mutex
 	var checks []health.Check
@@ -408,9 +559,16 @@ func run(paths config.Paths, log *slog.Logger) error {
 
 	runErr := client.Run(ctx, c, key, client.Handlers{
 		TerminalUsers: terms.AllowedUsers,
+		TrustedKeys: func() []sign.PublicKey {
+			return update.TrustedKeys(filepath.Join(paths.Dir, update.TrustedKeysFile))
+		},
 		Connected: func(send func(v any) error) {
 			terms.SetSender(send)
+			fileSend.Store(files.Sender(send))
 			hub.set(send)
+			if gw != nil {
+				_ = send(devnetStatus(gw))
+			}
 			if s, ok := lastPortmap.Load().(portmap.Status); ok {
 				_ = send(map[string]any{"type": "portmap_status", "status": s})
 			}
@@ -422,11 +580,12 @@ func run(paths config.Paths, log *slog.Logger) error {
 		},
 		Message: func(typ string, raw []byte) {
 			var m struct {
-				SID  string `json:"sid"`
-				User string `json:"user"`
-				Data string `json:"data"`
-				Cols int    `json:"cols"`
-				Rows int    `json:"rows"`
+				SID  string             `json:"sid"`
+				User string             `json:"user"`
+				Data string             `json:"data"`
+				Cols int                `json:"cols"`
+				Rows int                `json:"rows"`
+				Auth *termauth.OpenAuth `json:"auth"`
 			}
 			if json.Unmarshal(raw, &m) != nil {
 				return
@@ -455,6 +614,154 @@ func run(paths config.Paths, log *slog.Logger) error {
 				}
 				return
 			}
+			if typ == "term_trust" {
+				var tm struct {
+					Records []termauth.Record `json:"records"`
+				}
+				if json.Unmarshal(raw, &tm) != nil {
+					return
+				}
+				changed, err := trust.Apply(tm.Records)
+				st := map[string]any{"type": "trust_status", "version": 0}
+				if cur := trust.Current(); cur != nil {
+					st["version"] = cur.Version
+					if changed {
+						log.Info("터미널 신뢰 목록 갱신", "version", cur.Version, "keys", len(cur.Keys))
+					}
+				}
+				if err != nil {
+					log.Warn("터미널 신뢰 목록 변경 거부", "err", err)
+					st["error"] = err.Error()
+				}
+				_ = hub.send(st)
+				return
+			}
+			if strings.HasPrefix(typ, "file_") {
+				var fm struct {
+					SID    string             `json:"sid"`
+					User   string             `json:"user"`
+					Path   string             `json:"path"`
+					Size   int64              `json:"size"`
+					SHA256 string             `json:"sha256"`
+					Data   string             `json:"data"`
+					Auth   *termauth.OpenAuth `json:"auth"`
+				}
+				if json.Unmarshal(raw, &fm) != nil {
+					return
+				}
+				deny := func(err error) {
+					log.Warn("파일 전송 거부", "user", fm.User, "path", fm.Path, "err", err)
+					_ = hub.send(map[string]any{"type": "file_error", "sid": fm.SID, "error": err.Error()})
+				}
+				switch typ {
+				case "file_put", "file_get":
+					if !features.Get().Terminal {
+						deny(errors.New("이 서버에서 웹 터미널(파일 포함)이 꺼져 있습니다"))
+						return
+					}
+					action := files.GetAction(fm.User, fm.Path)
+					if typ == "file_put" {
+						action = files.PutAction(fm.User, fm.Size, fm.SHA256, fm.Path)
+					}
+					who, err := trust.CheckAction(c.NodeID, action, fm.Auth)
+					if err != nil {
+						deny(err)
+						return
+					}
+					log.Info("파일 전송 서명 확인", "op", typ, "user", fm.User, "path", fm.Path, "by", who)
+					if typ == "file_put" {
+						fileMgr.Put(fm.SID, fm.User, fm.Path, fm.Size, fm.SHA256)
+					} else {
+						go fileMgr.Get(fm.SID, fm.User, fm.Path)
+					}
+				case "file_chunk":
+					fileMgr.Chunk(fm.SID, fm.Data)
+				case "file_end":
+					go fileMgr.End(fm.SID)
+				case "file_cancel":
+					fileMgr.Cancel(fm.SID)
+				}
+				return
+			}
+			if typ == "reach_run" {
+				go runReach()
+				return
+			}
+			if typ == "reach_probe" {
+				// 외부 접속 검증의 "밖": 다른 서버의 공인 주소로 접속해 본다. 이 Agent가 내부망 스캐너로 쓰이지
+				// 않게 공인 IP와 22·80·443만.
+				var pr struct {
+					RID   string `json:"rid"`
+					Host  string `json:"host"`
+					Ports []int  `json:"ports"`
+				}
+				if json.Unmarshal(raw, &pr) != nil {
+					return
+				}
+				go func() {
+					res := map[string]any{"type": "reach_probe_result", "rid": pr.RID}
+					ip, err := netip.ParseAddr(pr.Host)
+					var ports []int
+					for _, p := range pr.Ports {
+						if (p == 22 || p == 80 || p == 443) && !slices.Contains(ports, p) {
+							ports = append(ports, p)
+						}
+					}
+					if err != nil || !ip.Is4() || ip.IsPrivate() || ip.IsLoopback() || ip.IsLinkLocalUnicast() || ip.IsUnspecified() || netip.MustParsePrefix("100.64.0.0/10").Contains(ip) {
+						res["error"] = "공인 IP만 시험할 수 있습니다"
+					} else {
+						pctx, cancel := context.WithTimeout(ctx, 10*time.Second)
+						res["results"] = reach.Probe(pctx, ip.String(), ports, 5*time.Second)
+						cancel()
+					}
+					_ = hub.send(res)
+				}()
+				return
+			}
+			if typ == "checkup_run" {
+				go runCheckup()
+				return
+			}
+			if typ == "checkup_fix" {
+				var fm struct {
+					RID   string             `json:"rid"`
+					Check string             `json:"check"`
+					Auth  *termauth.OpenAuth `json:"auth"`
+				}
+				if json.Unmarshal(raw, &fm) != nil {
+					return
+				}
+				go func() {
+					reply := map[string]any{"type": "checkup_fixed", "rid": fm.RID, "check": fm.Check}
+					who, err := trust.CheckAction(c.NodeID, "fix:"+fm.Check, fm.Auth)
+					switch {
+					case err != nil:
+						log.Warn("고치기 거부 (패스키 서명 확인 실패)", "check", fm.Check, "err", err)
+					case checker == nil:
+						err = errors.New("이 서버에서는 점검표를 쓸 수 없습니다 (root가 아님)")
+					case !checkup.Fixable[fm.Check]:
+						err = fmt.Errorf("고칠 수 없는 항목: %s", fm.Check)
+					default:
+						log.Info("보안 점검표 고치기", "check", fm.Check, "by", who)
+						checkMu.Lock()
+						var msg string
+						if os.Getenv("DOUVE_TEST_CHECKUP_ROOT") != "" {
+							msg, err = checker.Fix(ctx, fm.Check) // 시험: 가짜 파일·명령
+						} else {
+							msg, err = fixOutsideSandbox(ctx, fm.Check)
+						}
+						checkMu.Unlock()
+						reply["message"] = msg
+					}
+					reply["ok"] = err == nil
+					if err != nil {
+						reply["error"] = err.Error()
+					}
+					_ = hub.send(reply)
+					runCheckup()
+				}()
+				return
+			}
 			if typ == "expose_res" {
 				var r struct {
 					RID string `json:"rid"`
@@ -470,6 +777,13 @@ func run(paths config.Paths, log *slog.Logger) error {
 					_ = hub.send(map[string]any{"type": "term_exit", "sid": m.SID, "code": -1, "error": "이 서버에서 웹 터미널이 꺼져 있습니다"})
 					return
 				}
+				who, err := trust.CheckOpen(c.NodeID, m.User, m.Auth)
+				if err != nil {
+					log.Warn("터미널 열기 거부 (패스키 서명 확인 실패)", "user", m.User, "err", err)
+					_ = hub.send(map[string]any{"type": "term_exit", "sid": m.SID, "code": -1, "error": err.Error()})
+					return
+				}
+				log.Info("터미널 열기 서명 확인", "sid", m.SID, "user", m.User, "by", who)
 				go terms.Open(m.SID, m.User, m.Cols, m.Rows)
 			case "term_in":
 				terms.Input(m.SID, m.Data)
@@ -508,6 +822,97 @@ func run(paths config.Paths, log *slog.Logger) error {
 	return nil
 }
 
+func devnetStatus(gw *devnet.Gateway) map[string]any {
+	return map[string]any{"type": "devnet_status", "pubkey": gw.PublicKey(), "running": gw.Running(), "peers": gw.Status()}
+}
+
+// fixOutsideSandbox는 고치기를 Agent 샌드박스(ProtectSystem=strict 등) 밖, PID1이 만든 새 유닛에서
+// root로 실행한다 (/etc 쓰기·패키지 설치가 필요). 같은 실행 파일의 checkup-fix가 결과를 JSON으로 낸다.
+func fixOutsideSandbox(ctx context.Context, check string) (string, error) {
+	if !checkup.Fixable[check] {
+		return "", fmt.Errorf("고칠 수 없는 항목: %s", check)
+	}
+	exe, err := os.Executable()
+	if err != nil {
+		return "", err
+	}
+	if p, err := filepath.EvalSymlinks(exe); err == nil {
+		exe = p
+	}
+	unit := fmt.Sprintf("douve-fix-%s-%d", strings.ReplaceAll(check, "_", "-"), time.Now().UnixNano())
+	// 소켓 쌍으로 (파이프는 SELinux에서 PID1에 넘길 수 없다)
+	out, runErr := sockexec.Output(ctx, nil, "systemd-run", "--wait", "--pipe", "--quiet", "--collect", "--unit="+unit,
+		"-p", "TimeoutStartSec=15min", "--", exe, "checkup-fix", check)
+	var res struct {
+		OK      bool   `json:"ok"`
+		Message string `json:"message"`
+		Error   string `json:"error"`
+	}
+	lines := strings.Split(strings.TrimSpace(string(out)), "\n")
+	if json.Unmarshal([]byte(lines[len(lines)-1]), &res) != nil {
+		if runErr != nil {
+			return "", fmt.Errorf("systemd-run: %v", runErr)
+		}
+		return "", fmt.Errorf("고치기 결과를 읽을 수 없습니다")
+	}
+	if !res.OK {
+		return "", errors.New(res.Error)
+	}
+	return res.Message, nil
+}
+
+// runCheckupFix: douve-agent checkup-fix <항목> (root, 샌드박스 밖). 결과를 JSON 한 줄로.
+func runCheckupFix(args []string) error {
+	if len(args) != 1 {
+		return errors.New("사용: douve-agent checkup-fix <항목>")
+	}
+	msg, err := checkup.New().Fix(context.Background(), args[0])
+	res := map[string]any{"ok": err == nil, "message": msg}
+	if err != nil {
+		res["error"] = err.Error()
+	}
+	b, _ := json.Marshal(res)
+	fmt.Println(string(b))
+	return nil
+}
+
+// runTerminalTrust: douve-agent terminal-trust show | reset
+func runTerminalTrust(args []string) error {
+	op := "show"
+	if len(args) > 0 {
+		op = args[0]
+	}
+	switch op {
+	case "show":
+		s, err := termauth.Open(update.StateDir())
+		if err != nil {
+			return err
+		}
+		cur := s.Current()
+		if cur == nil {
+			fmt.Println(i18n.T("터미널 신뢰 목록 없음 (다음 Hub 접속 때 처음 받는 목록을 믿습니다)"))
+			return nil
+		}
+		fmt.Printf(i18n.T("터미널 신뢰 목록 버전 %d (%s)\n"), cur.Version, cur.Origin)
+		for _, k := range cur.Keys {
+			scope := i18n.T("관리자")
+			if !k.Admin {
+				scope = fmt.Sprintf(i18n.T("서버 %v"), k.Nodes)
+			}
+			fmt.Printf("  %s  %s  %s\n", k.User, scope, k.ID)
+		}
+		return nil
+	case "reset":
+		if err := termauth.Reset(update.StateDir()); err != nil {
+			return err
+		}
+		fmt.Println(i18n.T("터미널 신뢰 목록을 지웠습니다. Agent를 다시 시작하면 Hub가 보내는 목록을 처음처럼 믿습니다:"))
+		fmt.Println("  systemctl restart douve-agent")
+		return nil
+	}
+	return errors.New(i18n.T("사용: douve-agent terminal-trust [show|reset]"))
+}
+
 func runInstall(args []string) error {
 	fs := flag.NewFlagSet("install", flag.ExitOnError)
 	var o install.Options
@@ -519,6 +924,7 @@ func runInstall(args []string) error {
 	fs.StringVar(&o.From, "from", "", "릴리스 파일이 있는 로컬 폴더")
 	fs.StringVar(&o.Release, "release", "", "릴리스 주소 (기본 GitHub 최신)")
 	fs.BoolVar(&o.TestPlain, "test-plain", false, "시험용: 인증서 없이 평문 :80")
+	fs.StringVar(&o.TrustedKey, "trusted-key", "", "공식 키 말고도 믿을 릴리스 서명 공개키 파일 (직접 빌드한 릴리스)")
 	_ = fs.Parse(args)
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()

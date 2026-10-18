@@ -25,10 +25,31 @@
   <select id="term-user" hidden></select>
   <span id="term-status" class="meta"></span>
   <span class="spacer"></span>
+  <button id="term-files" class="small" hidden>파일</button>
   <button id="term-connect" class="small primary" hidden>연결</button>
   <button id="term-close" class="small" hidden>닫기</button>
 </header>
 <div id="term" class="term-box"></div>
+<dialog id="files-dialog">
+  <div class="stack">
+    <h2>파일 <span class="meta" id="files-user"></span></h2>
+    <p class="meta">이 서버에 이 계정 권한으로 올리고 내려받습니다 (100MB까지). 상대 경로는 홈 폴더 기준입니다.
+      파일마다 패스키로 승인하고, 서버가 그 서명과 내용(SHA-256)을 직접 확인합니다.</p>
+    <form class="stack" id="up-form">
+      <strong>올리기</strong>
+      <input type="file" id="up-file" required>
+      <label class="field">저장할 경로 <input id="up-path" autocomplete="off" placeholder="예: uploads/backup.tar.gz" required></label>
+      <div class="row end"><button class="primary small" id="up-go">올리기</button></div>
+    </form>
+    <form class="stack" id="down-form">
+      <strong>내려받기</strong>
+      <label class="field">파일 경로 <input id="down-path" autocomplete="off" placeholder="예: /var/log/syslog" required></label>
+      <div class="row end"><button class="primary small" id="down-go">내려받기</button></div>
+    </form>
+    <div class="meta" id="files-status"></div>
+    <div class="row end"><button class="small" id="files-close">닫기</button></div>
+  </div>
+</dialog>
 <p id="msg" class="msg" role="status"></p>
 </body>
 </html>

@@ -1,6 +1,7 @@
 #pragma once
 // 초대: 1회용 링크로 패스키를 등록해 사용자가 된다 (Google 없이 시작, 다른 사람 초대).
 
+#include "store/access.h"
 #include "store/db.h"
 
 #include <cstdint>
@@ -15,8 +16,16 @@ struct Invite {
     std::int64_t expiresAt = 0;
 };
 
+// 초대로 들어온 사람의 역할과 권한 (기본: 관리자 — CLI로 만드는 첫 초대)
+struct InviteAccess {
+    Role role = Role::Admin;
+    std::set<std::int64_t> nodes, services;
+};
+
 Invite createInvite(Database& db, const std::string& email, std::optional<std::int64_t> createdBy,
-                    int ttlSeconds, std::int64_t now);
+                    int ttlSeconds, std::int64_t now, const InviteAccess& access = {});
+// 초대에 담긴 역할과 권한 (사용 여부와 관계없이). 없는 초대면 nullopt.
+std::optional<InviteAccess> inviteAccess(Database& db, const std::string& token);
 // 유효한(미사용·미만료) 초대의 이메일. 소모하지 않는다.
 std::optional<std::string> peekInvite(Database& db, const std::string& token, std::int64_t now);
 // 초대를 소모한다. 동시에 두 번 써도 한 번만 성공한다.

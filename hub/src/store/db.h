@@ -64,6 +64,8 @@ class Database {
     void exec(const std::string& sql);
     std::int64_t lastInsertId() const;
     int changes() const;
+    // 이미 트랜잭션 안인지 (BEGIN을 겹쳐 열지 않기 위해)
+    bool inTransaction() const;
     int schemaVersion();
 
     std::unique_lock<std::recursive_mutex> lock() { return std::unique_lock(mutex_); }

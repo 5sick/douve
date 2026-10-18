@@ -17,7 +17,8 @@ namespace douve {
 namespace {
 
 const char* kUsage =
-    "사용: douve-hub service-add --name 이름 --host 도메인 --upstream 주소:포트\n"
+    "사용: douve-hub service-add --name 이름 --host 도메인 (--upstream 주소:포트 | --redirect "
+    "URL)\n"
     "         [--node 노드이름] [--auth douve|public] [--public-path /경로/ ...] [--config 파일]\n";
 
 std::string hostOfUrl(const std::string& url) {
@@ -63,7 +64,12 @@ int runServiceAdd(const std::vector<std::string>& args) {
             s.host = v;
         else if (a == "--upstream")
             s.upstream = v;
-        else if (a == "--node")
+        else if (a == "--redirect") {
+            // 다른 주소로 보내기 (예: 주소를 옮긴 뒤 예전 주소)
+            s.kind = "redirect";
+            s.redirectTo = v;
+            s.auth = "public";
+        } else if (a == "--node")
             nodeName = v;
         else if (a == "--auth")
             s.auth = v;
@@ -103,9 +109,12 @@ int runServiceAdd(const std::vector<std::string>& args) {
                 return 1;
             }
             audit(db, std::nullopt, "service_created", "cli",
-                  s.name + " " + s.host + " → " + s.upstream + " (" + s.auth + ")", now);
+                  s.name + " " + s.host + " → " +
+                      (s.kind == "redirect" ? s.redirectTo : s.upstream) + " (" + s.auth + ")",
+                  now);
             std::cout << T("등록: ") << created->name << " " << created->host << " → "
-                      << created->upstream << " (" << created->auth << ")\n";
+                      << (created->kind == "redirect" ? created->redirectTo : created->upstream)
+                      << " (" << created->auth << ")\n";
         }
         matchOwner(cfg->databasePath);
     } catch (const std::exception& e) {

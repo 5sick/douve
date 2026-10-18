@@ -74,6 +74,8 @@ void HubApp::registerChannelRoutes() {
                             v["ok"] = true;
                             v["channel"] = channelJson(c);
                             cb(json(v));
+                            if (sendsAudit(c)) // 밀린 기록을 30초 기다리지 않고 바로
+                                sendAuditBatch(c.id);
                         },
                         {drogon::Post});
 

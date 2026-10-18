@@ -1,4 +1,5 @@
 #include "app.h"
+#include "util/json.h"
 
 #include "assets.h"
 #include "auth/redirect.h"
@@ -6,6 +7,7 @@
 #include "http_util.h"
 #include "store/invites.h"
 #include "store/repo.h"
+#include "store/services.h"
 #include "util/crypto.h"
 #include "version.h"
 
@@ -23,6 +25,7 @@ using Callback = std::function<void(const HttpResponsePtr&)>;
 
 HubApp::HubApp(HubConfig cfg) : cfg_(std::move(cfg)) {
     db_ = std::make_unique<Database>(cfg_.databasePath);
+    sealAuditLog(*db_); // 해시 체인 도입 전 기록을 봉인
     sessions_ = std::make_unique<SessionManager>(*db_, cfg_);
     google_ = std::make_unique<GoogleOidc>(cfg_);
     settings_.load(cfg_, *db_);
@@ -50,6 +53,16 @@ bool HubApp::emailAllowed(const std::string& email) {
     return std::find(cfg_.allowedEmails.begin(), cfg_.allowedEmails.end(), email) !=
                cfg_.allowedEmails.end() ||
            userAllowed(*db_, email);
+}
+
+Access HubApp::access(const SessionInfo& s) {
+    auto a = loadAccess(*db_, s.userId);
+    if (!a.admin() && std::find(cfg_.allowedEmails.begin(), cfg_.allowedEmails.end(), s.email) !=
+                          cfg_.allowedEmails.end()) {
+        setAccess(*db_, s.userId, Role::Admin, {}, {});
+        a = Access{Role::Admin, {}, {}};
+    }
+    return a;
 }
 
 void HubApp::startSession(const HttpRequestPtr& req, const HttpResponsePtr& resp,
@@ -227,6 +240,7 @@ void HubApp::registerRoutes() {
     app.registerHandler("/static/xterm.js", page("xterm.js"), {drogon::Get});
     app.registerHandler("/static/xterm.css", page("xterm.css"), {drogon::Get});
     app.registerHandler("/static/addon-fit.js", page("addon-fit.js"), {drogon::Get});
+    app.registerHandler("/static/qrcode.js", page("qrcode.js"), {drogon::Get});
     app.registerHandler("/static/dashboard.js", page("dashboard.js"), {drogon::Get});
     app.registerHandler("/static/app.js", page("app.js"), {drogon::Get});
     app.registerHandler("/static/style.css", page("style.css"), {drogon::Get});
@@ -263,12 +277,17 @@ void HubApp::registerRoutes() {
     registerAccountRoutes();
     registerNodeRoutes();
     registerServiceRoutes();
+    registerDevnetRoutes();
+    registerCheckupRoutes();
+    registerReachRoutes();
     registerTerminalRoutes();
+    registerFileRoutes();
     registerSettingsRoutes();
     registerSecurityRoutes();
     registerHomeRoutes();
     registerPortmapRoutes();
     registerChannelRoutes();
+    registerUserRoutes();
 
     app.registerHandler("/healthz",
                         [](const HttpRequestPtr&, Callback&& cb) {
@@ -279,8 +298,9 @@ void HubApp::registerRoutes() {
                         },
                         {drogon::Get});
 
-    // nginx auth_request 대상. 본문 없이 상태 코드만 의미가 있다.
-    //   200: 로그인됨 (X-Douve-User 헤더에 이메일) / 401: 로그인 필요
+    // 입구(Agent edge)·nginx auth_request 대상. 본문 없이 상태 코드만 의미가 있다.
+    //   200: 들어가도 됨 (X-Douve-User 헤더에 이메일) / 401: 로그인 필요 / 403: 이 앱 권한 없음
+    // ?service=<id>: 그 서비스(앱)에 대한 권한을 본다. 없으면 관리자만 (어느 앱인지 모르는 요청).
     app.registerHandler("/auth/verify",
                         [this](const HttpRequestPtr& req, Callback&& cb) {
                             auto s = currentSession(req, now());
@@ -288,10 +308,26 @@ void HubApp::registerRoutes() {
                             r->addHeader("Cache-Control", "no-store");
                             if (!s) {
                                 r->setStatusCode(drogon::k401Unauthorized);
-                            } else {
-                                r->setStatusCode(drogon::k200OK);
-                                r->addHeader("X-Douve-User", s->email);
+                                return cb(r);
                             }
+                            const auto a = access(*s);
+                            bool allowed = a.admin();
+                            if (!allowed) {
+                                const std::string sid = req->getParameter("service");
+                                std::int64_t id = 0;
+                                try {
+                                    id = sid.empty() || sid.size() > 18 ? 0 : std::stoll(sid);
+                                } catch (const std::exception&) {
+                                }
+                                if (auto sv = id > 0 ? findService(*db_, id) : std::nullopt)
+                                    allowed = a.service(sv->id, sv->nodeId);
+                            }
+                            if (!allowed) {
+                                r->setStatusCode(drogon::k403Forbidden);
+                                return cb(r);
+                            }
+                            r->setStatusCode(drogon::k200OK);
+                            r->addHeader("X-Douve-User", s->email);
                             cb(r);
                         },
                         {drogon::Get, drogon::Head});
@@ -316,6 +352,7 @@ void HubApp::registerRoutes() {
                             v["email"] = s->email;
                             v["auth_method"] = s->authMethod;
                             v["reauth_fresh"] = sessions_->reauthFresh(*s, t);
+                            v["role"] = roleName(access(*s).role);
                             cb(json(v));
                         },
                         {drogon::Get});
@@ -363,7 +400,7 @@ void HubApp::registerRoutes() {
                 return cb(loginError("state"));
             }
             Json::Value p;
-            Json::Reader().parse(*payload, p);
+            parseJson(*payload, p);
             const std::string rd = p["rd"].asString();
             const auto creds = settings_.get();
             google_->completeLogin(

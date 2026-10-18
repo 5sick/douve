@@ -1,4 +1,5 @@
 #include "webauthn/cose.h"
+#include "webauthn/cbor_guard.h"
 
 #include "auth/jwt.h"
 
@@ -69,6 +70,10 @@ bool digestVerify(EVP_PKEY* key, const EVP_MD* md, const Bytes& msg, const Bytes
 
 std::optional<CoseKey> parseCoseKey(const std::uint8_t* data, std::size_t len,
                                     std::size_t* consumed, std::string& error) {
+    if (!cborWithinBounds(data, len)) {
+        error = "COSE 키 CBOR 오류";
+        return std::nullopt;
+    }
     cbor_load_result res{};
     Item root(cbor_load(data, len, &res));
     if (!root || res.error.code != CBOR_ERR_NONE || !cbor_isa_map(root.get()) ||

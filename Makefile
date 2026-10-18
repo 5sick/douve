@@ -2,9 +2,10 @@
 ifeq ($(origin VERSION), undefined)
 VERSION := $(shell scripts/version.sh)
 endif
+SIGNING_KEY ?= $(HOME)/.config/douve/dev-signing.key
 GO_LDFLAGS := -s -w -X github.com/5sick/douve/agent/internal/version.Version=$(VERSION)
 
-.PHONY: help all hub hub-static agent test test-hub test-agent e2e fmt lint clean
+.PHONY: help all hub hub-static agent test test-hub test-agent e2e fuzz fmt lint clean
 
 help:
 	@echo "make hub         - douve-hub 빌드 (build/hub/douve-hub)"
@@ -34,6 +35,10 @@ agent:
 	cd dist && sha256sum douve-agent-linux-amd64 douve-agent-linux-arm64 > SHA256SUMS
 	scripts/agent-licenses.sh > dist/THIRD_PARTY_LICENSES-agent.txt
 	echo "$(VERSION)" > dist/VERSION
+	CGO_ENABLED=0 go -C agent build -trimpath -o ../dist/douve-sign ./cmd/douve-sign
+	@# 서명 키가 있으면 SHA256SUMS에 서명 (Agent는 서명 없는 업데이트를 받지 않는다)
+	@if [ -f "$(SIGNING_KEY)" ]; then dist/douve-sign sign "$(SIGNING_KEY)" dist/SHA256SUMS "$(VERSION)"; \
+	else echo "서명 키 없음($(SIGNING_KEY)) — 서명하지 않음"; rm -f dist/SHA256SUMS.minisig; fi
 
 test: test-hub test-agent
 
@@ -48,13 +53,20 @@ e2e: hub agent
 	tests/e2e/google_flow.sh build/hub/douve-hub
 	tests/e2e/agent_flow.sh build/hub/douve-hub dist
 	tests/e2e/edge_flow.sh build/hub/douve-hub dist
+	tests/e2e/devnet_flow.sh build/hub/douve-hub dist
+	tests/e2e/checkup_flow.sh build/hub/douve-hub dist
+	tests/e2e/reach_flow.sh build/hub/douve-hub dist
 	tests/e2e/settings_flow.sh build/hub/douve-hub
 	tests/e2e/recovery_flow.sh build/hub/douve-hub
 	tests/e2e/tailscale_flow.sh build/hub/douve-hub
+	tests/e2e/rbac_flow.sh build/hub/douve-hub
 	tests/e2e/security_flow.sh build/hub/douve-hub dist
 	cd tests/e2e/browser && npm ci --no-audit --no-fund >/dev/null && node passkey_flow.mjs ../../../build/hub/douve-hub
 	tests/e2e/terminal_flow.sh build/hub/douve-hub dist
 	cd tests/e2e/browser && node invite_flow.mjs ../../../build/hub/douve-hub
+
+fuzz:  ## 퍼징 (FUZZTIME=60초씩, clang·libclang-rt 필요)
+	scripts/fuzz.sh all
 
 fmt:
 	find hub -name '*.cc' -o -name '*.h' | xargs clang-format -i
