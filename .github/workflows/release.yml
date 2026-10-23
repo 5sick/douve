@@ -11,6 +11,8 @@ permissions:
 
 jobs:
   hub:
+    # 공개 저장소에서만 (개발 저장소에는 서명 키가 없다)
+    if: github.repository == '5sick/douve'
     strategy:
       matrix:
         include:
@@ -32,6 +34,7 @@ jobs:
             out/THIRD_PARTY_LICENSES-hub.txt
 
   agent:
+    if: github.repository == '5sick/douve'
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4

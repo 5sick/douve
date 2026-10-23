@@ -1,5 +1,16 @@
 # Changelog
 
+## v0.3.1
+
+Security update — upgrade recommended for every install (the entry serves HTTP/2 to the internet).
+
+- Agents are built with Go 1.26.10, fixing Go standard library vulnerabilities reachable from
+  Douve code: HTTP/2 server memory exhaustion and crash, HTTP/1 connection desynchronization,
+  MIME header memory limit bypass, and others (GO-2026-6603, 6605, 6607, 6608, 6610, 6611, 6612,
+  6613, 6617, 6809).
+- Threat model: a compromised Hub can expose, through the agent tunnel, ports that listen only on
+  127.0.0.1 of a managed server.
+
 ## v0.3.0
 
 Upgrading from v0.2.0: replace `douve-hub` and restart (take a `douve-hub backup` first); the
